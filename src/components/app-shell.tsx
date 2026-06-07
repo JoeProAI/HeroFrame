@@ -51,6 +51,7 @@ export const AppShell = () => {
   const [styleHint, setStyleHint] = useState("anime kinetic camera, cinematic moonlight");
   const [status, setStatus] = useState<PipelineStatus>("idle");
   const [message, setMessage] = useState("Bootstrap the workspace to start runs.");
+  const [generatedAssetUrl, setGeneratedAssetUrl] = useState<string>("");
 
   const isReady = useMemo(() => bootstrap !== null, [bootstrap]);
 
@@ -117,10 +118,58 @@ export const AppShell = () => {
     }
   };
 
+  const generateWithWaveSpeed = async () => {
+    setStatus("loading");
+    setMessage("Sending orchestration request to WaveSpeed...");
+    try {
+      const response = await fetch("/api/wavespeed/orchestrate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "image",
+          runId: bootstrap?.projectId ?? "adhoc-run",
+          prompt: `${sceneTitle}. ${storyBeat}`,
+          styleHint,
+          strategy: { speed: "balanced", async: true },
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        ok: boolean;
+        data?: {
+          output?: string;
+          data?: {
+            outputs?: Array<{ url?: string }>;
+          };
+        };
+      };
+
+      if (!response.ok || !payload.ok) {
+        throw new Error("WaveSpeed request failed.");
+      }
+
+      const maybeUrl =
+        payload.data?.output ??
+        payload.data?.data?.outputs?.at(0)?.url ??
+        "";
+
+      setGeneratedAssetUrl(maybeUrl);
+      setStatus("success");
+      setMessage(
+        maybeUrl
+          ? "WaveSpeed generation submitted. Preview URL captured."
+          : "WaveSpeed request succeeded. Waiting for webhook/job completion.",
+      );
+    } catch (error) {
+      setStatus("error");
+      setMessage(error instanceof Error ? error.message : "Unknown WaveSpeed error.");
+    }
+  };
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-10 md:px-10">
       <header className={`${surfaceClass} p-6`}>
-        <p className="text-xs uppercase tracking-[0.24em] text-[var(--accent)]">Cartoon Hero Lab</p>
+        <p className="text-xs uppercase tracking-[0.24em] text-[var(--accent)]">Heroframe</p>
         <h1 className="mt-2 text-3xl font-bold leading-tight md:text-4xl">
           Build cinematic workflows, not one-off prompts.
         </h1>
@@ -190,9 +239,20 @@ export const AppShell = () => {
             >
               Refresh Runs
             </button>
+            <button
+              type="button"
+              onClick={generateWithWaveSpeed}
+              disabled={status === "loading"}
+              className="rounded-xl border px-4 py-2 text-sm font-semibold text-[var(--foreground)] hover:bg-[#22366f44] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Generate With WaveSpeed
+            </button>
           </div>
 
           <p className="mt-4 text-sm text-[var(--muted)]">{message}</p>
+          {generatedAssetUrl ? (
+            <p className="mt-2 break-all text-xs text-[var(--accent)]">{generatedAssetUrl}</p>
+          ) : null}
         </div>
 
         <div className={`${surfaceClass} p-6`}>

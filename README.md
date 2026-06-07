@@ -1,4 +1,4 @@
-# Cartoon Hero Orchestrator
+# Heroframe
 
 Workflow orchestration studio for the Cartoon Hero course. This app is built to convert course assets into repeatable production pipelines for prompt generation, voice, render queueing, and quality review.
 
@@ -40,8 +40,13 @@ copy .env.example .env.local
 - `NEXT_PUBLIC_FIREBASE_API_KEY`
 - `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
 - `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
 - `NEXT_PUBLIC_FIREBASE_APP_ID`
-- `WAVEFORM_API_KEY`
+- `WAVESPEED_API_KEY`
+- `WAVESPEED_API_BASE_URL` (optional, defaults to `https://api.wavespeed.ai`)
+- `WAVESPEED_CALLBACK_BASE_URL` (optional but recommended, used to attach webhook URL)
+- `WAVESPEED_WEBHOOK_SECRET` (optional, recommended for webhook signature verification)
 
 4. Run Convex dev backend:
 
@@ -62,9 +67,21 @@ npm run dev
 3. Add env vars from `.env.example` in Vercel Project Settings.
 4. Deploy.
 
+## WaveSpeed architecture edge
+
+This repo now includes a WaveSpeed integration that most teams skip:
+
+- `POST /api/wavespeed/orchestrate`: server-only auth gateway for Bearer token usage
+- strategy-based model routing by mode + speed tier
+- prompt fingerprinting (`sha256`) for dedupe and traceability
+- retry and timeout control for transient `429/5xx` failures
+- `POST /api/wavespeed/webhook`: signature-aware callback endpoint (`webhook-signature`)
+
+This gives you an edge because you are not making raw provider calls from the browser. You get deterministic orchestration, better failure handling, and a structure that can scale into multi-provider routing.
+
 ## Suggested next build steps
 
-1. Add Firebase login gate and persist user identity into Convex.
-2. Add Waveform adapter route to generate voice jobs from run inputs.
-3. Add Aytona worker integration for render execution and status callbacks.
-4. Add provider-level retries and failure reasons on each workflow step.
+1. Persist WaveSpeed job IDs + outputs on run records in Convex.
+2. Add Firebase login gate and map user IDs to project ownership.
+3. Add Aytona worker fan-out to process batches and callbacks.
+4. Add per-model cost and latency analytics for automatic strategy switching.

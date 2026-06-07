@@ -13,8 +13,8 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Cartoon Hero Orchestrator",
-  description: "Workflow studio for the Cartoon Hero course pipeline.",
+  title: "Heroframe",
+  description: "Production control room for cinematic cartoon workflows.",
 };
 
 export default function RootLayout({
