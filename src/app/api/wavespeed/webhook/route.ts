@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyWaveSpeedWebhookSignature } from "@/lib/wavespeed/auth";
-import { wavespeedEnv } from "@/lib/wavespeed/env";
+import { getWaveSpeedEnv } from "@/lib/wavespeed/env";
 import type { WaveSpeedWebhookEvent } from "@/types/wavespeed";
 
 const toStatus = (status: string | undefined): "queued" | "running" | "succeeded" | "failed" | "unknown" => {
@@ -14,6 +14,7 @@ const toStatus = (status: string | undefined): "queued" | "running" | "succeeded
 };
 
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
+  const wavespeedEnv = getWaveSpeedEnv();
   const rawBody = await request.text();
   const signatureHeader = request.headers.get("webhook-signature");
 

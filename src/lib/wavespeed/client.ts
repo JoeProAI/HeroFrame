@@ -1,5 +1,5 @@
 import { getWaveSpeedAuthHeaders } from "@/lib/wavespeed/auth";
-import { wavespeedEnv } from "@/lib/wavespeed/env";
+import { getWaveSpeedEnv } from "@/lib/wavespeed/env";
 
 const MAX_RETRIES = 3;
 const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
@@ -27,6 +27,7 @@ export const callWaveSpeed = async ({
   payload: Record<string, unknown>;
   webhookUrl?: string;
 }) => {
+  const wavespeedEnv = getWaveSpeedEnv();
   const base = wavespeedEnv.baseUrl.replace(/\/$/, "");
   const path = modelPath.startsWith("/") ? modelPath : `/${modelPath}`;
   const endpoint = new URL(`${base}${path}`);

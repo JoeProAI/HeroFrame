@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callWaveSpeed } from "@/lib/wavespeed/client";
 import { buildWaveSpeedPayload, createPromptFingerprint, resolveWaveSpeedModelPath } from "@/lib/wavespeed/strategy";
-import { wavespeedEnv } from "@/lib/wavespeed/env";
+import { getWaveSpeedEnv } from "@/lib/wavespeed/env";
 import type { WaveSpeedOrchestrateRequest } from "@/types/wavespeed";
 
 const MAX_PROMPT_LENGTH = 4000;
@@ -9,6 +9,7 @@ const MAX_PROMPT_LENGTH = 4000;
 const badRequest = (message: string) => NextResponse.json({ error: message }, { status: 400 });
 
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
+  const wavespeedEnv = getWaveSpeedEnv();
   let body: WaveSpeedOrchestrateRequest;
   try {
     body = (await request.json()) as WaveSpeedOrchestrateRequest;

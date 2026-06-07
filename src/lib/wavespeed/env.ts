@@ -10,9 +10,9 @@ const optionalServerEnv = (value: string | undefined): string | undefined => {
   return trimmed ? trimmed : undefined;
 };
 
-export const wavespeedEnv = {
+export const getWaveSpeedEnv = () => ({
   apiKey: requiredServerEnv(process.env.WAVESPEED_API_KEY, "WAVESPEED_API_KEY"),
   baseUrl: optionalServerEnv(process.env.WAVESPEED_API_BASE_URL) ?? "https://api.wavespeed.ai",
   webhookSigningSecret: optionalServerEnv(process.env.WAVESPEED_WEBHOOK_SECRET),
   callbackBaseUrl: optionalServerEnv(process.env.WAVESPEED_CALLBACK_BASE_URL),
-};
+});

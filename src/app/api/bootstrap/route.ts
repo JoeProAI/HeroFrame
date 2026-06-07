@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { convexClient } from "@/lib/convex";
+import { getConvexClient } from "@/lib/convex";
 import { convexFunctions } from "@/lib/convex-functions";
 import { heroFightLeagueTemplate } from "@/lib/workflow-templates";
 import { toSlug } from "@/lib/slug";
 
 export const POST = async (): Promise<NextResponse> => {
+  const convexClient = getConvexClient();
   const ownerId = "local-dev-owner";
   const projectName = "Cartoon Hero Course";
   const slug = toSlug(projectName);

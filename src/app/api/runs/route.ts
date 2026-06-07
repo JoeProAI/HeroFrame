@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { convexClient } from "@/lib/convex";
+import { getConvexClient } from "@/lib/convex";
 import { convexFunctions } from "@/lib/convex-functions";
 
 export const GET = async (request: NextRequest): Promise<NextResponse> => {
+  const convexClient = getConvexClient();
   const projectId = request.nextUrl.searchParams.get("projectId");
   if (!projectId) {
     return NextResponse.json({ error: "projectId is required" }, { status: 400 });
@@ -13,6 +14,7 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
 };
 
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
+  const convexClient = getConvexClient();
   const body = (await request.json()) as {
     projectId?: string;
     workflowId?: string;
