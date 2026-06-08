@@ -1,7 +1,6 @@
 "use client";
 
-import { ReactNode, useMemo, useState } from "react";
-import { courseAssetIndex } from "@/lib/course-assets";
+import { useMemo, useState } from "react";
 import { frontEndDesignTemplate, heroFightLeagueTemplate } from "@/lib/workflow-templates";
 
 type PipelineStatus = "idle" | "loading" | "success" | "error";
@@ -10,11 +9,7 @@ type RunSummary = {
   _id: string;
   status: "queued" | "running" | "succeeded" | "failed";
   createdAt: number;
-  input: {
-    title: string;
-    storyBeat: string;
-    styleHint?: string;
-  };
+  input: { title: string; storyBeat: string; styleHint?: string };
 };
 
 type BootstrapPayload = {
@@ -25,148 +20,67 @@ type BootstrapPayload = {
   ownerId: string;
 };
 
-const formatDate = (value: number): string => new Date(value).toLocaleString();
-
-const statusBadge: Record<RunSummary["status"], string> = {
-  queued: "bg-[var(--color-accent-2)] text-[var(--color-ink)]",
-  running: "bg-[var(--color-accent-3)] text-[var(--color-ink)]",
-  succeeded: "bg-[var(--color-success)] text-[var(--color-ink)]",
-  failed: "bg-[var(--color-accent)] text-[var(--color-ink)]",
+const statusColor: Record<RunSummary["status"], string> = {
+  queued: "bg-amber-100 text-amber-800",
+  running: "bg-sky-100 text-sky-800",
+  succeeded: "bg-emerald-100 text-emerald-800",
+  failed: "bg-rose-100 text-rose-800",
 };
 
-// Sticker panel: thick ink outline + hard offset shadow. The core material.
-const panel =
-  "relative rounded-[22px] border-[3px] border-[var(--color-ink)] bg-[var(--color-surface)] p-5 shadow-[var(--ink-shadow)]";
-
-const btn =
-  "inline-flex min-h-11 items-center justify-center rounded-full border-[3px] border-[var(--color-ink)] px-4 text-sm font-bold uppercase tracking-wide shadow-[var(--ink-shadow)] transition hover:-translate-y-0.5 hover:translate-x-0 active:translate-x-1 active:translate-y-1 active:shadow-none focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--color-focus)] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0";
-
-const field =
-  "min-h-11 rounded-xl border-[3px] border-[var(--color-ink)] bg-[var(--color-bg-soft)] px-3 text-sm text-[var(--color-text)] outline-none transition focus-visible:border-[var(--color-accent-2)]";
-
-const Eyebrow = ({ children }: { children: ReactNode }) => (
-  <span className="inline-block rounded-full border-[3px] border-[var(--color-ink)] bg-[var(--color-accent-2)] px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--color-ink)] shadow-[var(--ink-shadow)]">
-    {children}
-  </span>
-);
-
-const PanelHeading = ({ children }: { children: ReactNode }) => (
-  <h2 className="font-[family-name:var(--font-display)] text-lg font-extrabold tracking-tight text-[var(--color-text)]">
-    {children}
-  </h2>
-);
-
-// Signature element: a cartoon film strip with sprocket holes.
-const FilmStrip = () => (
-  <div className="relative w-full overflow-hidden rounded-2xl border-[3px] border-[var(--color-ink)] bg-[var(--color-ink)] shadow-[var(--ink-shadow)]">
-    <div className="flex items-center justify-between px-3 py-1.5">
-      {Array.from({ length: 9 }).map((_, index) => (
-        <span key={index} className="h-2.5 w-2.5 rounded-[3px] bg-[var(--color-bg)]" />
-      ))}
-    </div>
-    <div className="grid grid-cols-4">
-      {[
-        { tone: "var(--color-accent)", label: "INK" },
-        { tone: "var(--color-accent-2)", label: "PAINT" },
-        { tone: "var(--color-accent-3)", label: "MOVE" },
-        { tone: "var(--color-accent-4)", label: "CUT" },
-      ].map((cel) => (
-        <div
-          key={cel.label}
-          className="flex aspect-square items-center justify-center border-l-[3px] border-[var(--color-ink)] first:border-l-0"
-          style={{ background: cel.tone }}
-        >
-          <span className="font-[family-name:var(--font-display)] text-base font-black text-[var(--color-ink)]">
-            {cel.label}
-          </span>
-        </div>
-      ))}
-    </div>
-    <div className="flex items-center justify-between px-3 py-1.5">
-      {Array.from({ length: 9 }).map((_, index) => (
-        <span key={index} className="h-2.5 w-2.5 rounded-[3px] bg-[var(--color-bg)]" />
-      ))}
-    </div>
-  </div>
-);
-
-type WorkflowRailProps = {
-  badge: string;
-  title: string;
-  steps: { id: string; label: string; kind: string; required: boolean }[];
-};
-
-const WorkflowRail = ({ badge, title, steps }: WorkflowRailProps) => (
-  <section className={panel}>
-    <div className="flex items-center justify-between gap-3">
-      <PanelHeading>{title}</PanelHeading>
-      <Eyebrow>{badge}</Eyebrow>
-    </div>
-    <ol className="mt-4 grid gap-2">
-      {steps.map((step, index) => (
-        <li
-          key={step.id}
-          className="flex items-center gap-3 rounded-xl border-[3px] border-[var(--color-ink)] bg-[var(--color-panel)] px-3 py-2.5 transition hover:-translate-y-0.5"
-        >
-          <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full border-[3px] border-[var(--color-ink)] bg-[var(--color-accent)] font-[family-name:var(--font-display)] text-xs font-black text-[var(--color-ink)]">
-            {index + 1}
-          </span>
-          <span className="flex-1 text-sm font-semibold text-[var(--color-text)]">{step.label}</span>
-          <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-muted)]">
-            {step.required ? step.kind : `${step.kind} · opt`}
-          </span>
-        </li>
-      ))}
-    </ol>
-  </section>
-);
+const card = "rounded-2xl border border-zinc-200 bg-white p-5";
+const label = "text-xs font-semibold uppercase tracking-wide text-zinc-500";
+const input =
+  "min-h-11 rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus-visible:border-zinc-900 focus-visible:ring-1 focus-visible:ring-zinc-900";
+const primaryBtn =
+  "inline-flex min-h-11 items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm font-semibold text-white transition hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 disabled:cursor-not-allowed disabled:opacity-40";
+const ghostBtn =
+  "inline-flex min-h-11 items-center justify-center rounded-lg border border-zinc-300 px-4 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 disabled:cursor-not-allowed disabled:opacity-40";
 
 export const AppShell = () => {
   const [bootstrap, setBootstrap] = useState<BootstrapPayload | null>(null);
   const [runs, setRuns] = useState<RunSummary[]>([]);
-  const [sceneTitle, setSceneTitle] = useState("The Last Throne - Rooftop Duel");
-  const [storyBeat, setStoryBeat] = useState(
-    "Hero arrives late, villain reveals a false prophecy, then both launch into a vertical fight arc.",
-  );
-  const [styleHint, setStyleHint] = useState("rubber-hose energy, bold ink outlines, saturated cel paint");
+  const [sceneTitle, setSceneTitle] = useState("");
+  const [storyBeat, setStoryBeat] = useState("");
+  const [styleHint, setStyleHint] = useState("");
   const [status, setStatus] = useState<PipelineStatus>("idle");
-  const [message, setMessage] = useState("Pull the lever to spin up your cartoon studio.");
-  const [generatedAssetUrl, setGeneratedAssetUrl] = useState("");
+  const [message, setMessage] = useState("");
+  const [resultUrl, setResultUrl] = useState("");
 
   const isReady = useMemo(() => bootstrap !== null, [bootstrap]);
+  const canQueue = isReady && sceneTitle.trim().length > 0 && storyBeat.trim().length > 0;
 
   const bootstrapWorkspace = async () => {
     setStatus("loading");
-    setMessage("Inking the studio. Setting up workflows...");
+    setMessage("Creating project and workflows in Convex...");
     try {
       const response = await fetch("/api/bootstrap", { method: "POST" });
-      if (!response.ok) throw new Error("Failed to bootstrap workspace.");
-      const payload = (await response.json()) as BootstrapPayload;
-      setBootstrap(payload);
+      const payload = (await response.json().catch(() => null)) as BootstrapPayload | { error?: string } | null;
+      if (!response.ok || !payload || "error" in payload) {
+        throw new Error((payload as { error?: string })?.error ?? `Bootstrap failed (HTTP ${response.status}).`);
+      }
+      setBootstrap(payload as BootstrapPayload);
       setStatus("success");
-      setMessage("Studio is open. Hero and design workflows are loaded.");
-      await loadRuns(payload.projectId);
+      setMessage("Workspace ready.");
+      await loadRuns((payload as BootstrapPayload).projectId);
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Unknown bootstrap error.");
+      setMessage(error instanceof Error ? error.message : "Bootstrap failed.");
     }
   };
 
   const loadRuns = async (projectIdArg?: string) => {
     const projectId = projectIdArg ?? bootstrap?.projectId;
-    if (!projectId) {
-      setStatus("error");
-      setMessage("No project loaded yet. Open the studio first.");
-      return;
-    }
+    if (!projectId) return;
     try {
       const response = await fetch(`/api/runs?projectId=${encodeURIComponent(projectId)}`);
-      if (!response.ok) throw new Error("Failed to load runs.");
-      const payload = (await response.json()) as { runs: RunSummary[] };
-      setRuns(payload.runs);
+      const payload = (await response.json().catch(() => null)) as { runs?: RunSummary[]; error?: string } | null;
+      if (!response.ok || !payload || payload.error) {
+        throw new Error(payload?.error ?? `Failed to load runs (HTTP ${response.status}).`);
+      }
+      setRuns(payload.runs ?? []);
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Unknown load error.");
+      setMessage(error instanceof Error ? error.message : "Failed to load runs.");
     }
   };
 
@@ -175,11 +89,11 @@ export const AppShell = () => {
     const workflowId = bootstrap.heroWorkflowId ?? bootstrap.workflowId;
     if (!workflowId) {
       setStatus("error");
-      setMessage("Hero workflow id missing. Re-open the studio.");
+      setMessage("Workflow id missing. Re-run bootstrap.");
       return;
     }
     setStatus("loading");
-    setMessage("Rolling a new cartoon sequence...");
+    setMessage("Queueing run...");
     try {
       const response = await fetch("/api/runs", {
         method: "POST",
@@ -190,190 +104,205 @@ export const AppShell = () => {
           triggeredBy: bootstrap.ownerId,
           title: sceneTitle,
           storyBeat,
-          styleHint,
+          styleHint: styleHint || undefined,
         }),
       });
-      if (!response.ok) throw new Error("Run creation failed.");
+      const payload = (await response.json().catch(() => null)) as { runId?: string; error?: string } | null;
+      if (!response.ok || !payload?.runId) {
+        throw new Error(payload?.error ?? `Run creation failed (HTTP ${response.status}).`);
+      }
       setStatus("success");
-      setMessage("Scene queued. It is on the animation table.");
+      setMessage(`Run created (${payload.runId}).`);
       await loadRuns();
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Unknown queue error.");
+      setMessage(error instanceof Error ? error.message : "Run creation failed.");
     }
   };
 
-  const generateWithWaveSpeed = async () => {
+  const generateFrame = async () => {
+    if (!sceneTitle.trim() || !storyBeat.trim()) {
+      setStatus("error");
+      setMessage("Add a scene title and story beat first.");
+      return;
+    }
     setStatus("loading");
-    setMessage("Sending frames to WaveSpeed...");
+    setMessage("Sending request to WaveSpeed...");
+    setResultUrl("");
     try {
       const response = await fetch("/api/wavespeed/orchestrate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode: "image",
-          runId: bootstrap?.projectId ?? "adhoc-run",
+          runId: bootstrap?.projectId ?? "adhoc",
           prompt: `${sceneTitle}. ${storyBeat}`,
-          styleHint,
+          styleHint: styleHint || undefined,
           strategy: { speed: "balanced", async: true },
         }),
       });
-      const payload = (await response.json()) as {
-        ok: boolean;
-        data?: {
-          output?: string;
-          data?: { outputs?: Array<{ url?: string }> };
-        };
-      };
-      if (!response.ok || !payload.ok) throw new Error("WaveSpeed request failed.");
-      const maybeUrl = payload.data?.output ?? payload.data?.data?.outputs?.at(0)?.url ?? "";
-      setGeneratedAssetUrl(maybeUrl);
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; error?: unknown; data?: { output?: string; data?: { outputs?: Array<{ url?: string }> } } }
+        | null;
+      if (!response.ok || !payload?.ok) {
+        throw new Error(
+          typeof payload?.error === "string" ? payload.error : `WaveSpeed request failed (HTTP ${response.status}).`,
+        );
+      }
+      const url = payload.data?.output ?? payload.data?.data?.outputs?.at(0)?.url ?? "";
+      setResultUrl(url);
       setStatus("success");
-      setMessage(maybeUrl ? "Frame generated. Preview is ready." : "Frame accepted. Awaiting render webhook.");
+      setMessage(url ? "Generation returned a preview URL." : "Request accepted. Result will arrive via webhook.");
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Unknown generation error.");
+      setMessage(error instanceof Error ? error.message : "WaveSpeed request failed.");
     }
   };
 
   const publishToGhost = async () => {
+    if (!sceneTitle.trim()) {
+      setStatus("error");
+      setMessage("Add a title before publishing.");
+      return;
+    }
     setStatus("loading");
-    setMessage("Publishing draft to joepro-press...");
+    setMessage("Publishing draft to Ghost...");
+    setResultUrl("");
     try {
       const response = await fetch("/api/ghost/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: sceneTitle,
-          storyBeat,
-          styleHint,
-          status: "draft",
-        }),
+        body: JSON.stringify({ title: sceneTitle, storyBeat, styleHint: styleHint || undefined, status: "draft" }),
       });
-      const payload = (await response.json()) as {
-        ok: boolean;
-        post?: { url: string };
-        error?: string;
-      };
-      if (!response.ok || !payload.ok) {
-        throw new Error(payload.error ?? "Ghost publish failed.");
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; post?: { url: string }; error?: string }
+        | null;
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error ?? `Ghost publish failed (HTTP ${response.status}).`);
       }
-      setGeneratedAssetUrl(payload.post?.url ?? "");
+      setResultUrl(payload.post?.url ?? "");
       setStatus("success");
-      setMessage("Draft published to Ghost. Open it from the link below.");
+      setMessage("Draft published to Ghost.");
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Unknown Ghost error.");
+      setMessage(error instanceof Error ? error.message : "Ghost publish failed.");
     }
   };
 
-  const feedbackTone =
+  const feedbackColor =
     status === "error"
-      ? "border-[var(--color-accent)] bg-[var(--color-accent)]/15 text-[var(--color-accent)]"
-      : status === "loading"
-        ? "border-[var(--color-accent-2)] bg-[var(--color-accent-2)]/15 text-[var(--color-accent-2)]"
-        : "border-[var(--color-ink)] bg-[var(--color-panel)] text-[var(--color-muted)]";
+      ? "border-rose-300 bg-rose-50 text-rose-700"
+      : status === "success"
+        ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+        : "border-zinc-200 bg-zinc-50 text-zinc-600";
 
   return (
-    <main className="mx-auto flex w-full max-w-[1320px] flex-col gap-6 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
-      <header className={`${panel} overflow-hidden`}>
-        <div className="grid items-center gap-6 lg:grid-cols-[1.35fr_0.65fr]">
-          <div>
-            <Eyebrow>Ages of Cartoons</Eyebrow>
-            <h1 className="mt-4 font-[family-name:var(--font-display)] text-5xl font-black uppercase leading-[0.9] tracking-tight text-[var(--color-text)] sm:text-6xl lg:text-7xl">
-              Heroframe
-              <span className="mt-1 block text-[var(--color-accent)]">cartoon</span>
-              <span className="block text-[var(--color-accent-3)]">maker.</span>
-            </h1>
-            <p className="mt-5 max-w-xl text-sm leading-6 text-[var(--color-muted)] sm:text-base">
-              From scribbled idea to inked-and-painted scene. Heroframe runs the whole studio line: story, style,
-              frame generation, and quality gates, all on one animation table.
-            </p>
-            <div className="mt-5 inline-flex min-h-11 items-center rounded-full border-[3px] border-[var(--color-ink)] bg-[var(--color-bg-soft)] px-4 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-muted)] shadow-[var(--ink-shadow)]">
-              status:&nbsp;<span className="text-[var(--color-accent-2)]">{status}</span>
-            </div>
-          </div>
-          <FilmStrip />
-        </div>
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6 lg:py-12">
+      <header>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">Heroframe</p>
+        <h1 className="mt-1 font-[family-name:var(--font-bricolage)] text-3xl font-extrabold tracking-tight text-zinc-900 sm:text-4xl">
+          Cartoon production workspace
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm text-zinc-600">
+          Compose a scene, queue it through a workflow, generate a frame, or publish a draft. Each action calls a real
+          backend route and reports exactly what happened.
+        </p>
       </header>
 
-      <section className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
-        <div className={panel}>
-          <PanelHeading>Animation Table</PanelHeading>
+      <section className="grid gap-6 lg:grid-cols-[1.4fr_0.6fr]">
+        <div className={card}>
+          <h2 className="text-base font-bold text-zinc-900">Compose</h2>
           <div className="mt-4 grid gap-3">
-            <label className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--color-muted)]" htmlFor="scene-title">
+            <label className={label} htmlFor="scene-title">
               Scene title
             </label>
-            <input id="scene-title" value={sceneTitle} onChange={(e) => setSceneTitle(e.target.value)} className={field} />
+            <input
+              id="scene-title"
+              value={sceneTitle}
+              onChange={(e) => setSceneTitle(e.target.value)}
+              placeholder="e.g. Rooftop duel at dusk"
+              className={input}
+            />
 
-            <label className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--color-muted)]" htmlFor="story-beat">
+            <label className={label} htmlFor="story-beat">
               Story beat
             </label>
             <textarea
               id="story-beat"
               value={storyBeat}
               onChange={(e) => setStoryBeat(e.target.value)}
-              className={`${field} min-h-32 py-2`}
+              placeholder="What happens in this scene?"
+              className={`${input} min-h-28 py-2`}
             />
 
-            <label className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--color-muted)]" htmlFor="style-hint">
-              Style direction
+            <label className={label} htmlFor="style-hint">
+              Style hint (optional)
             </label>
-            <input id="style-hint" value={styleHint} onChange={(e) => setStyleHint(e.target.value)} className={field} />
+            <input
+              id="style-hint"
+              value={styleHint}
+              onChange={(e) => setStyleHint(e.target.value)}
+              placeholder="e.g. bold outlines, saturated color"
+              className={input}
+            />
           </div>
 
-          <div className="mt-5 flex flex-wrap gap-3">
-            <button type="button" onClick={bootstrapWorkspace} disabled={status === "loading"} className={`${btn} bg-[var(--color-accent-2)] text-[var(--color-ink)]`}>
-              Open Studio
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button type="button" onClick={bootstrapWorkspace} disabled={status === "loading"} className={primaryBtn}>
+              {isReady ? "Re-bootstrap" : "Bootstrap workspace"}
             </button>
-            <button type="button" onClick={queueRun} disabled={!isReady || status === "loading"} className={`${btn} bg-[var(--color-accent-3)] text-[var(--color-ink)]`}>
-              Queue Scene
+            <button type="button" onClick={queueRun} disabled={!canQueue || status === "loading"} className={ghostBtn}>
+              Queue run
             </button>
-            <button type="button" onClick={generateWithWaveSpeed} disabled={status === "loading"} className={`${btn} bg-[var(--color-accent)] text-[var(--color-text)]`}>
-              Generate Frame
+            <button type="button" onClick={generateFrame} disabled={status === "loading"} className={ghostBtn}>
+              Generate frame
             </button>
-            <button type="button" onClick={publishToGhost} disabled={status === "loading"} className={`${btn} bg-[var(--color-accent-4)] text-[var(--color-text)]`}>
+            <button type="button" onClick={publishToGhost} disabled={status === "loading"} className={ghostBtn}>
               Publish to Ghost
             </button>
-            <button type="button" onClick={() => loadRuns()} disabled={!isReady || status === "loading"} className={`${btn} bg-[var(--color-panel)] text-[var(--color-text)]`}>
-              Refresh
+            <button type="button" onClick={() => loadRuns()} disabled={!isReady || status === "loading"} className={ghostBtn}>
+              Refresh runs
             </button>
           </div>
 
-          <div className={`mt-4 rounded-xl border-[3px] px-3 py-2 text-sm font-semibold ${feedbackTone}`}>{message}</div>
+          {message ? (
+            <div className={`mt-4 rounded-lg border px-3 py-2 text-sm ${feedbackColor}`} role="status">
+              {message}
+            </div>
+          ) : null}
 
-          {generatedAssetUrl ? (
+          {resultUrl ? (
             <a
-              href={generatedAssetUrl}
+              href={resultUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-2 block break-all font-mono text-xs text-[var(--color-accent-2)] underline-offset-4 hover:underline"
+              className="mt-2 block break-all text-sm font-medium text-sky-700 underline-offset-4 hover:underline"
             >
-              {generatedAssetUrl}
+              {resultUrl}
             </a>
-          ) : (
-            <p className="mt-2 font-mono text-xs text-[var(--color-muted)]">No frame URL yet.</p>
-          )}
+          ) : null}
         </div>
 
-        <aside className={panel}>
-          <PanelHeading>Reel</PanelHeading>
-          <div className="mt-4 space-y-3">
-            {runs.length === 0 ? (
-              <div className="rounded-xl border-[3px] border-dashed border-[var(--color-ink)] bg-[var(--color-panel)] px-3 py-8 text-center text-sm text-[var(--color-muted)]">
-                Empty reel. Open the studio and roll your first scene.
-              </div>
+        <aside className={card}>
+          <h2 className="text-base font-bold text-zinc-900">Runs</h2>
+          <div className="mt-4 space-y-2">
+            {!isReady ? (
+              <p className="text-sm text-zinc-500">Bootstrap the workspace to load runs.</p>
+            ) : runs.length === 0 ? (
+              <p className="text-sm text-zinc-500">No runs yet. Compose a scene and queue a run.</p>
             ) : (
               runs.map((run) => (
-                <article key={run._id} className="rounded-xl border-[3px] border-[var(--color-ink)] bg-[var(--color-panel)] px-3 py-3">
+                <article key={run._id} className="rounded-lg border border-zinc-200 p-3">
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="text-sm font-bold text-[var(--color-text)]">{run.input.title}</h3>
-                    <span className={`rounded-full border-[3px] border-[var(--color-ink)] px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${statusBadge[run.status]}`}>
+                    <h3 className="text-sm font-semibold text-zinc-900">{run.input.title}</h3>
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusColor[run.status]}`}>
                       {run.status}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-[var(--color-muted)]">{run.input.storyBeat}</p>
-                  <p className="mt-2 font-mono text-[11px] text-[var(--color-muted)]">{formatDate(run.createdAt)}</p>
+                  {run.input.storyBeat ? (
+                    <p className="mt-1 text-xs text-zinc-600">{run.input.storyBeat}</p>
+                  ) : null}
+                  <p className="mt-2 text-[11px] text-zinc-400">{new Date(run.createdAt).toLocaleString()}</p>
                 </article>
               ))
             )}
@@ -382,22 +311,25 @@ export const AppShell = () => {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
-        <WorkflowRail badge="Production" title="Hero Workflow" steps={heroFightLeagueTemplate.steps} />
-        <WorkflowRail badge="Design" title="Front-End Design" steps={frontEndDesignTemplate.steps} />
-      </section>
-
-      <section className={panel}>
-        <PanelHeading>Source Archive</PanelHeading>
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          {courseAssetIndex.map((assetPath) => (
-            <div
-              key={assetPath}
-              className="rounded-xl border-[3px] border-[var(--color-ink)] bg-[var(--color-panel)] px-3 py-2 font-mono text-[11px] text-[var(--color-muted)]"
-            >
-              {assetPath}
-            </div>
-          ))}
-        </div>
+        {[
+          { title: "Hero workflow", steps: heroFightLeagueTemplate.steps },
+          { title: "Front-end design workflow", steps: frontEndDesignTemplate.steps },
+        ].map((workflow) => (
+          <div key={workflow.title} className={card}>
+            <h2 className="text-base font-bold text-zinc-900">{workflow.title}</h2>
+            <ol className="mt-3 grid gap-1.5">
+              {workflow.steps.map((step, index) => (
+                <li key={step.id} className="flex items-center gap-2 text-sm text-zinc-700">
+                  <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-zinc-900 text-[11px] font-semibold text-white">
+                    {index + 1}
+                  </span>
+                  <span className="flex-1">{step.label}</span>
+                  {!step.required ? <span className="text-[11px] text-zinc-400">optional</span> : null}
+                </li>
+              ))}
+            </ol>
+          </div>
+        ))}
       </section>
     </main>
   );

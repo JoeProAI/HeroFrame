@@ -1,81 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  /* Ink + paper */
-  --color-bg: #0c0a12;
-  --color-bg-soft: #141019;
-  --color-surface: #181320;
-  --color-panel: #1f1830;
-  --color-ink: #05040a;
-  --color-text: #fbf4e6;
-  --color-muted: #b3a7c4;
-
-  /* Cartoon paint pots */
-  --color-accent: #ff5a3c;
-  --color-accent-2: #ffd23f;
-  --color-accent-3: #2ec4b6;
-  --color-accent-4: #8a5cff;
-  --color-focus: #ffd23f;
-  --color-success: #4ade80;
-  --color-warning: #ffd23f;
-  --color-danger: #ff5a3c;
-
-  /* Sticker shadow language */
-  --ink-shadow: 4px 4px 0 0 var(--color-ink);
-  --ink-shadow-lg: 7px 7px 0 0 var(--color-ink);
-}
-
-@theme inline {
-  --color-background: var(--color-bg);
-  --color-foreground: var(--color-text);
-  --font-sans: var(--font-space-grotesk);
-  --font-display: var(--font-bricolage);
-  --font-mono: var(--font-jetbrains-mono);
+  color-scheme: light;
 }
 
 body {
-  background:
-    radial-gradient(circle at 18% 12%, #8a5cff22, transparent 42%),
-    radial-gradient(circle at 86% 8%, #2ec4b622, transparent 40%),
-    radial-gradient(circle at 70% 100%, #ff5a3c1f, transparent 45%),
-    var(--color-bg);
-  color: var(--color-text);
+  background: #ffffff;
+  color: #18181b;
   font-family: var(--font-space-grotesk), system-ui, sans-serif;
-}
-
-/* Halftone dot texture — the signature material */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0.06;
-  background-image: radial-gradient(var(--color-text) 1.1px, transparent 1.2px);
-  background-size: 16px 16px;
-}
-
-body > * {
-  position: relative;
-  z-index: 1;
-}
-
-::selection {
-  background: var(--color-accent-2);
-  color: var(--color-ink);
-}
-
-a,
-button {
-  transition:
-    transform 120ms ease,
-    background-color 160ms ease,
-    box-shadow 160ms ease;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  a,
-  button {
-    transition: none;
-  }
 }
