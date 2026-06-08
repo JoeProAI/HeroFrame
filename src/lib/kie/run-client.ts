@@ -50,7 +50,8 @@ export const runKieGeneration = async (params: RunKieParams): Promise<string> =>
   const taskId = payload.taskId;
   if (!taskId) throw new Error("Kie returned no task id.");
 
-  const deadline = Date.now() + 120_000;
+  // image-to-image (character-locked scenes) can run several minutes.
+  const deadline = Date.now() + 300_000;
   while (Date.now() < deadline) {
     await sleep(3_000);
     try {
