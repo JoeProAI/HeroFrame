@@ -47,9 +47,6 @@ copy .env.example .env.local
 - `WAVESPEED_API_BASE_URL` (optional, defaults to `https://api.wavespeed.ai`)
 - `WAVESPEED_CALLBACK_BASE_URL` (optional but recommended, used to attach webhook URL)
 - `WAVESPEED_WEBHOOK_SECRET` (optional, recommended for webhook signature verification)
-- `GHOST_API_URL` (e.g. `https://joepro-press.ghost.io`)
-- `GHOST_ADMIN_API_KEY` (server-only, `id:secret` format)
-- `GHOST_CONTENT_API_KEY` (optional, read-only)
 - `KIE_API_KEY` (server-only; image/video generation via kie.ai)
 - `KIE_API_BASE_URL` (optional, defaults to `https://api.kie.ai`)
 - `KIE_CALLBACK_BASE_URL` (optional; enables Kie completion webhooks)
@@ -60,7 +57,13 @@ copy .env.example .env.local
 - `GET /api/kie/task?taskId=`: polls task state (`/api/v1/jobs/recordInfo`).
 - `POST /api/kie/callback`: receives Kie completion webhooks.
 - Model routing lives in `src/lib/kie/models.ts` (swap models by id, no rebuild). Default image model: `gpt-image-2-text-to-image`.
-- The Generate button in the UI uses Kie; it server-waits ~7s then client-polls the Art panel until the frame is ready.
+- The Generate button in the UI uses Kie; it server-waits ~7s then client-polls until the frame is ready.
+
+## Character consistency
+
+- Characters are saved client-side (localStorage) with a reference image URL.
+- Create a reference by generating one (text-to-image) or pasting an image URL.
+- Scene generation with an active character uses `mode: "image-edit"` so the reference is sent as `input_urls` to `gpt-image-2-image-to-image`, keeping the same character across scenes.
 
 4. Run Convex dev backend:
 

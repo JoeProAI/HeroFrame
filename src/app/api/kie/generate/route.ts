@@ -39,7 +39,8 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
   const input: Record<string, unknown> = { prompt };
   if (body.imageSize) input.image_size = body.imageSize;
-  if (body.imageUrls?.length) input.image_urls = body.imageUrls;
+  // gpt-image-2-image-to-image expects `input_urls`; pass reference images there.
+  if (body.imageUrls?.length) input.input_urls = body.imageUrls;
 
   let callBackUrl: string | undefined;
   try {

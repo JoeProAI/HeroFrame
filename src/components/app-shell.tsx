@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { frontEndDesignTemplate, heroFightLeagueTemplate } from "@/lib/workflow-templates";
+import { runKieGeneration } from "@/lib/kie/run-client";
+import { useCharacters } from "@/lib/use-characters";
 
 type PipelineStatus = "idle" | "loading" | "success" | "error";
-type Provider = "kie" | "wavespeed";
 type Speed = "fast" | "balanced" | "quality";
 
 type RunSummary = {
@@ -18,14 +19,13 @@ type Frame = {
   id: string;
   url: string;
   prompt: string;
-  provider: Provider;
+  characterName?: string;
   createdAt: number;
 };
 
 type BootstrapPayload = {
   projectId: string;
   heroWorkflowId?: string;
-  designWorkflowId?: string;
   workflowId?: string;
   ownerId: string;
 };
@@ -45,38 +45,121 @@ const btn =
   "inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-bold transition hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffd23f] disabled:cursor-not-allowed disabled:opacity-40 disabled:translate-y-0";
 
 const navItems = [
+  { id: "cast", label: "Cast", dot: "#8a5cff" },
   { id: "compose", label: "Compose", dot: "#ff5a3c" },
   { id: "frames", label: "Frames", dot: "#ffd23f" },
-  { id: "runs", label: "Runs", dot: "#2ec4b6" },
-  { id: "workflows", label: "Workflows", dot: "#8a5cff" },
+  { id: "workflows", label: "Workflows", dot: "#2ec4b6" },
 ];
 
 const speeds: Speed[] = ["fast", "balanced", "quality"];
 
 export const AppShell = () => {
-  const [bootstrap, setBootstrap] = useState<BootstrapPayload | null>(null);
+  const { characters, activeCharacter, activeId, setActiveId, addCharacter, removeCharacter } = useCharacters();
+
   const [runs, setRuns] = useState<RunSummary[]>([]);
+  const [bootstrap, setBootstrap] = useState<BootstrapPayload | null>(null);
+
+  // Character creation
+  const [charName, setCharName] = useState("");
+  const [charPrompt, setCharPrompt] = useState("");
+  const [charUrl, setCharUrl] = useState("");
+
+  // Scene composition
   const [sceneTitle, setSceneTitle] = useState("");
   const [storyBeat, setStoryBeat] = useState("");
   const [styleHint, setStyleHint] = useState("");
-  const [provider, setProvider] = useState<Provider>("kie");
   const [speed, setSpeed] = useState<Speed>("balanced");
+
   const [status, setStatus] = useState<PipelineStatus>("idle");
   const [message, setMessage] = useState("");
   const [frames, setFrames] = useState<Frame[]>([]);
 
-  const isReady = useMemo(() => bootstrap !== null, [bootstrap]);
-  const canQueue = isReady && sceneTitle.trim().length > 0 && storyBeat.trim().length > 0;
-  const canGenerate = sceneTitle.trim().length > 0 && storyBeat.trim().length > 0;
+  const isReady = bootstrap !== null;
+  const canScene = sceneTitle.trim().length > 0 && storyBeat.trim().length > 0;
 
-  const addFrame = (url: string, prompt: string, usedProvider: Provider) => {
-    if (!url) return;
+  const addFrame = (url: string, prompt: string, characterName?: string) => {
     setFrames((prev) => [
-      { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, url, prompt, provider: usedProvider, createdAt: Date.now() },
+      { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, url, prompt, characterName, createdAt: Date.now() },
       ...prev,
     ]);
   };
 
+  // ---- Character creation -------------------------------------------------
+  const createCharacterFromUrl = () => {
+    if (!charName.trim() || !charUrl.trim()) {
+      setStatus("error");
+      setMessage("Give the character a name and a reference image URL.");
+      return;
+    }
+    addCharacter(charName, charUrl.trim());
+    setCharName("");
+    setCharUrl("");
+    setStatus("success");
+    setMessage("Character saved from URL.");
+  };
+
+  const createCharacterFromPrompt = async () => {
+    if (!charName.trim() || !charPrompt.trim()) {
+      setStatus("error");
+      setMessage("Give the character a name and a reference prompt.");
+      return;
+    }
+    setStatus("loading");
+    setMessage(`Generating reference for ${charName.trim()}...`);
+    try {
+      const url = await runKieGeneration({
+        prompt: `Full-body character reference sheet, single character, neutral background: ${charPrompt.trim()}`,
+        styleHint: styleHint || undefined,
+        speed,
+        mode: "image",
+        onProgress: (state) => setMessage(`Generating reference... (${state})`),
+      });
+      addCharacter(charName, url, charPrompt.trim());
+      setCharName("");
+      setCharPrompt("");
+      setStatus("success");
+      setMessage("Reference generated and character saved.");
+    } catch (error) {
+      setStatus("error");
+      setMessage(error instanceof Error ? error.message : "Reference generation failed.");
+    }
+  };
+
+  // ---- Scene generation (character-aware) ---------------------------------
+  const generateScene = async () => {
+    if (!canScene) {
+      setStatus("error");
+      setMessage("Add a scene title and story beat first.");
+      return;
+    }
+    const prompt = [sceneTitle.trim(), storyBeat.trim()].filter(Boolean).join(". ");
+    setStatus("loading");
+    setMessage(
+      activeCharacter
+        ? `Generating scene with ${activeCharacter.name}...`
+        : "Generating scene (no character selected)...",
+    );
+    try {
+      const url = await runKieGeneration({
+        prompt: activeCharacter
+          ? `Keep the same character from the reference image. New scene: ${prompt}`
+          : prompt,
+        styleHint: styleHint || undefined,
+        speed,
+        mode: activeCharacter ? "image-edit" : "image",
+        imageUrls: activeCharacter ? [activeCharacter.referenceUrl] : undefined,
+        onProgress: (state) => setMessage(`Generating scene... (${state})`),
+      });
+      addFrame(url, prompt, activeCharacter?.name);
+      setStatus("success");
+      setMessage(activeCharacter ? `Scene generated with ${activeCharacter.name}.` : "Scene generated.");
+    } catch (error) {
+      setStatus("error");
+      setMessage(error instanceof Error ? error.message : "Scene generation failed.");
+    }
+  };
+
+  // ---- Convex-backed workspace (optional) ---------------------------------
   const bootstrapWorkspace = async () => {
     setStatus("loading");
     setMessage("Creating project and workflows in Convex...");
@@ -112,164 +195,6 @@ export const AppShell = () => {
     }
   };
 
-  const queueRun = async () => {
-    if (!bootstrap) return;
-    const workflowId = bootstrap.heroWorkflowId ?? bootstrap.workflowId;
-    if (!workflowId) {
-      setStatus("error");
-      setMessage("Workflow id missing. Re-run bootstrap.");
-      return;
-    }
-    setStatus("loading");
-    setMessage("Queueing run...");
-    try {
-      const response = await fetch("/api/runs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId: bootstrap.projectId,
-          workflowId,
-          triggeredBy: bootstrap.ownerId,
-          title: sceneTitle,
-          storyBeat,
-          styleHint: styleHint || undefined,
-        }),
-      });
-      const payload = (await response.json().catch(() => null)) as { runId?: string; error?: string } | null;
-      if (!response.ok || !payload?.runId) {
-        throw new Error(payload?.error ?? `Run creation failed (HTTP ${response.status}).`);
-      }
-      setStatus("success");
-      setMessage(`Run created (${payload.runId}).`);
-      await loadRuns();
-    } catch (error) {
-      setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Run creation failed.");
-    }
-  };
-
-  const prompt = useMemo(
-    () => [sceneTitle.trim(), storyBeat.trim()].filter(Boolean).join(". "),
-    [sceneTitle, storyBeat],
-  );
-
-  const pollKieTask = async (taskId: string, promptText: string) => {
-    const deadline = Date.now() + 120_000;
-    while (Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 3_000));
-      try {
-        const response = await fetch(`/api/kie/task?taskId=${encodeURIComponent(taskId)}`);
-        const payload = (await response.json().catch(() => null)) as
-          | { ok?: boolean; state?: string; resultUrl?: string; failMsg?: string }
-          | null;
-        if (!response.ok || !payload?.ok) continue;
-        if (payload.state === "success") {
-          addFrame(payload.resultUrl ?? "", promptText, "kie");
-          setStatus("success");
-          setMessage(payload.resultUrl ? "Frame ready." : "Task finished without a result URL.");
-          return;
-        }
-        if (payload.state === "fail") {
-          setStatus("error");
-          setMessage(payload.failMsg ?? "Generation failed.");
-          return;
-        }
-        setMessage(`Generating frame via Kie... (${payload.state ?? "working"})`);
-      } catch {
-        // transient; keep polling
-      }
-    }
-    setStatus("error");
-    setMessage("Timed out waiting for the frame.");
-  };
-
-  const generateViaKie = async (promptText: string) => {
-    const response = await fetch("/api/kie/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: "image", speed, prompt: promptText, styleHint: styleHint || undefined }),
-    });
-    const payload = (await response.json().catch(() => null)) as
-      | { ok?: boolean; error?: string; taskId?: string; state?: string; resultUrl?: string; failMsg?: string }
-      | null;
-    if (!response.ok || !payload?.ok) throw new Error(payload?.error ?? `Kie request failed (HTTP ${response.status}).`);
-    if (payload.state === "fail") throw new Error(payload.failMsg ?? "Generation failed.");
-    if (payload.resultUrl) {
-      addFrame(payload.resultUrl, promptText, "kie");
-      setStatus("success");
-      setMessage("Frame ready.");
-      return;
-    }
-    if (payload.taskId) {
-      setMessage("Generating frame via Kie...");
-      await pollKieTask(payload.taskId, promptText);
-    }
-  };
-
-  const generateViaWaveSpeed = async (promptText: string) => {
-    const response = await fetch("/api/wavespeed/orchestrate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: "image", prompt: promptText, styleHint: styleHint || undefined, strategy: { speed, async: true } }),
-    });
-    const payload = (await response.json().catch(() => null)) as
-      | { ok?: boolean; error?: unknown; data?: { output?: string; data?: { outputs?: Array<{ url?: string }> } } }
-      | null;
-    if (!response.ok || !payload?.ok) {
-      throw new Error(typeof payload?.error === "string" ? payload.error : `WaveSpeed request failed (HTTP ${response.status}).`);
-    }
-    const url = payload.data?.output ?? payload.data?.data?.outputs?.at(0)?.url ?? "";
-    if (url) {
-      addFrame(url, promptText, "wavespeed");
-      setStatus("success");
-      setMessage("Frame ready.");
-    } else {
-      setStatus("success");
-      setMessage("WaveSpeed accepted the job; result will arrive via webhook.");
-    }
-  };
-
-  const generateFrame = async () => {
-    if (!canGenerate) {
-      setStatus("error");
-      setMessage("Add a scene title and story beat first.");
-      return;
-    }
-    setStatus("loading");
-    setMessage(`Sending request to ${provider === "kie" ? "Kie" : "WaveSpeed"}...`);
-    try {
-      if (provider === "kie") await generateViaKie(prompt);
-      else await generateViaWaveSpeed(prompt);
-    } catch (error) {
-      setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Generation failed.");
-    }
-  };
-
-  const publishToGhost = async () => {
-    if (!sceneTitle.trim()) {
-      setStatus("error");
-      setMessage("Add a title before publishing.");
-      return;
-    }
-    setStatus("loading");
-    setMessage("Publishing draft to Ghost...");
-    try {
-      const response = await fetch("/api/ghost/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: sceneTitle, storyBeat, styleHint: styleHint || undefined, status: "draft" }),
-      });
-      const payload = (await response.json().catch(() => null)) as { ok?: boolean; post?: { url: string }; error?: string } | null;
-      if (!response.ok || !payload?.ok) throw new Error(payload?.error ?? `Ghost publish failed (HTTP ${response.status}).`);
-      setStatus("success");
-      setMessage(payload.post?.url ? `Draft published: ${payload.post.url}` : "Draft published to Ghost.");
-    } catch (error) {
-      setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Ghost publish failed.");
-    }
-  };
-
   const feedbackColor =
     status === "error"
       ? "border-[#ff5a3c] bg-[#ff5a3c]/12 text-[#ff8c79]"
@@ -282,7 +207,6 @@ export const AppShell = () => {
 
   return (
     <div className="flex min-h-screen w-full">
-      {/* SIDEBAR */}
       <aside className="sticky top-0 hidden h-screen w-60 flex-none flex-col border-r border-[#2e2640] bg-[#0c0a12]/80 p-5 lg:flex">
         <div className="flex items-center gap-2">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#ff5a3c] font-[family-name:var(--font-bricolage)] text-lg font-black text-[#05040a]">H</span>
@@ -304,73 +228,106 @@ export const AppShell = () => {
             <span className="h-2.5 w-2.5 rounded-full" style={{ background: statusDot }} />
             <p className="text-xs font-semibold text-[#fbf4e6]">{status}</p>
           </div>
-          <p className="mt-1 text-[11px] leading-4 text-[#6b6480]">{frames.length} frame{frames.length === 1 ? "" : "s"} this session</p>
+          <p className="mt-1 text-[11px] leading-4 text-[#6b6480]">
+            {characters.length} cast · {frames.length} frame{frames.length === 1 ? "" : "s"}
+          </p>
         </div>
       </aside>
 
-      {/* MAIN */}
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-[#2e2640] bg-[#0c0a12]/85 px-5 py-3 backdrop-blur sm:px-8">
           <div className="flex items-center gap-3">
             <span className="rounded-full bg-[#ffd23f] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#05040a]">Ages of Cartoons</span>
-            <h1 className="font-[family-name:var(--font-bricolage)] text-lg font-black uppercase tracking-tight sm:text-xl">Production Workspace</h1>
+            <h1 className="font-[family-name:var(--font-bricolage)] text-lg font-black uppercase tracking-tight sm:text-xl">Character Studio</h1>
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={bootstrapWorkspace} disabled={status === "loading"} className={`${btn} bg-[#ffd23f] text-[#05040a] hover:bg-[#ffdd66]`}>{isReady ? "Re-bootstrap" : "Bootstrap"}</button>
-            <button type="button" onClick={() => loadRuns()} disabled={!isReady || status === "loading"} className={`${btn} border border-[#2e2640] bg-transparent text-[#fbf4e6] hover:bg-[#181320]`}>Refresh</button>
+            <span className="hidden text-xs text-[#6b6480] sm:inline">Active hero:</span>
+            <span className="rounded-full border border-[#2e2640] px-3 py-1 text-xs font-bold text-[#fbf4e6]">
+              {activeCharacter ? activeCharacter.name : "none"}
+            </span>
           </div>
         </header>
 
         <div className="grid flex-1 grid-cols-1 gap-5 p-5 sm:p-8 xl:grid-cols-12">
-          {/* Compose */}
+          {/* CAST — character library + creation */}
+          <section id="cast" className={`${panel} border-t-4 border-t-[#8a5cff] p-6 xl:col-span-4`}>
+            <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Cast</h2>
+            <p className="mt-1 text-xs text-[#6b6480]">Save a hero once. Reuse the same look across every scene.</p>
+
+            <div className="mt-4 grid gap-3 rounded-xl border border-[#2e2640] bg-[#0c0a12] p-4">
+              <div className="grid gap-2">
+                <label className={labelCls} htmlFor="char-name">Character name</label>
+                <input id="char-name" value={charName} onChange={(e) => setCharName(e.target.value)} placeholder="e.g. Captain Rook" className={field} />
+              </div>
+              <div className="grid gap-2">
+                <label className={labelCls} htmlFor="char-prompt">Describe the hero (to generate a reference)</label>
+                <textarea id="char-prompt" value={charPrompt} onChange={(e) => setCharPrompt(e.target.value)} placeholder="e.g. stocky knight, copper armor, scar over left eye, teal cape" className={`${field} min-h-20 py-2`} />
+              </div>
+              <button type="button" onClick={createCharacterFromPrompt} disabled={status === "loading"} className={`${btn} bg-[#8a5cff] text-[#fbf4e6] hover:bg-[#9d75ff]`}>
+                Generate reference + save
+              </button>
+              <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[#6b6480]">
+                <span className="h-px flex-1 bg-[#2e2640]" /> or paste a URL <span className="h-px flex-1 bg-[#2e2640]" />
+              </div>
+              <input value={charUrl} onChange={(e) => setCharUrl(e.target.value)} placeholder="https://image-url..." className={field} />
+              <button type="button" onClick={createCharacterFromUrl} disabled={status === "loading"} className={`${btn} border border-[#2e2640] bg-transparent text-[#fbf4e6] hover:bg-[#181320]`}>
+                Save from URL
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-2">
+              {characters.length === 0 ? (
+                <p className="text-sm text-[#6b6480]">No characters yet. Create your first hero above.</p>
+              ) : (
+                characters.map((character) => (
+                  <button
+                    key={character.id}
+                    type="button"
+                    onClick={() => setActiveId(character.id)}
+                    className={`flex items-center gap-3 rounded-xl border p-2 text-left transition ${
+                      character.id === activeId ? "border-[#8a5cff] bg-[#8a5cff]/10" : "border-[#2e2640] bg-[#0c0a12] hover:border-[#8a5cff]"
+                    }`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={character.referenceUrl} alt={character.name} className="h-12 w-12 flex-none rounded-lg border border-[#2e2640] object-cover" />
+                    <span className="flex-1 text-sm font-bold text-[#fbf4e6]">{character.name}</span>
+                    {character.id === activeId ? <span className="rounded-full bg-[#8a5cff] px-2 py-0.5 text-[10px] font-black uppercase text-[#fbf4e6]">active</span> : null}
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); removeCharacter(character.id); }}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); removeCharacter(character.id); } }}
+                      className="rounded-lg px-2 py-1 text-xs text-[#6b6480] transition hover:text-[#ff5a3c]"
+                    >
+                      remove
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </section>
+
+          {/* COMPOSE — scene generation */}
           <section id="compose" className={`${panel} border-t-4 border-t-[#ff5a3c] p-6 xl:col-span-4`}>
-            <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Compose</h2>
+            <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Compose scene</h2>
             <div className="mt-4 grid gap-3">
               <div className="grid gap-2">
                 <label className={labelCls} htmlFor="scene-title">Scene title</label>
-                <input id="scene-title" value={sceneTitle} onChange={(e) => setSceneTitle(e.target.value)} placeholder="e.g. Rooftop duel at dusk" className={field} />
+                <input id="scene-title" value={sceneTitle} onChange={(e) => setSceneTitle(e.target.value)} placeholder="e.g. Rooftop standoff" className={field} />
               </div>
               <div className="grid gap-2">
                 <label className={labelCls} htmlFor="story-beat">Story beat</label>
-                <textarea id="story-beat" value={storyBeat} onChange={(e) => setStoryBeat(e.target.value)} placeholder="What happens in this scene?" className={`${field} min-h-28 py-2`} />
+                <textarea id="story-beat" value={storyBeat} onChange={(e) => setStoryBeat(e.target.value)} placeholder="What happens in this scene?" className={`${field} min-h-24 py-2`} />
               </div>
               <div className="grid gap-2">
                 <label className={labelCls} htmlFor="style-hint">Style hint (optional)</label>
                 <input id="style-hint" value={styleHint} onChange={(e) => setStyleHint(e.target.value)} placeholder="e.g. bold outlines, saturated color" className={field} />
               </div>
-
-              {/* Provider selector */}
-              <div className="grid gap-2">
-                <span className={labelCls}>Provider</span>
-                <div className="flex gap-2">
-                  {(["kie", "wavespeed"] as Provider[]).map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setProvider(p)}
-                      className={`flex-1 rounded-xl border px-3 py-2 text-sm font-bold capitalize transition ${
-                        provider === p ? "border-[#ffd23f] bg-[#ffd23f] text-[#05040a]" : "border-[#2e2640] bg-[#0c0a12] text-[#b3a7c4] hover:text-[#fbf4e6]"
-                      }`}
-                    >
-                      {p === "kie" ? "Kie" : "WaveSpeed"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Speed selector */}
               <div className="grid gap-2">
                 <span className={labelCls}>Quality / speed</span>
                 <div className="flex gap-2">
                   {speeds.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setSpeed(s)}
-                      className={`flex-1 rounded-xl border px-3 py-2 text-xs font-bold capitalize transition ${
-                        speed === s ? "border-[#2ec4b6] bg-[#2ec4b6] text-[#05040a]" : "border-[#2e2640] bg-[#0c0a12] text-[#b3a7c4] hover:text-[#fbf4e6]"
-                      }`}
-                    >
+                    <button key={s} type="button" onClick={() => setSpeed(s)} className={`flex-1 rounded-xl border px-3 py-2 text-xs font-bold capitalize transition ${speed === s ? "border-[#2ec4b6] bg-[#2ec4b6] text-[#05040a]" : "border-[#2e2640] bg-[#0c0a12] text-[#b3a7c4] hover:text-[#fbf4e6]"}`}>
                       {s}
                     </button>
                   ))}
@@ -378,16 +335,40 @@ export const AppShell = () => {
               </div>
             </div>
 
-            <div className="mt-5 flex flex-wrap gap-2">
-              <button type="button" onClick={generateFrame} disabled={!canGenerate || status === "loading"} className={`${btn} bg-[#ff5a3c] text-[#fbf4e6] hover:bg-[#ff7259]`}>Generate frame</button>
-              <button type="button" onClick={queueRun} disabled={!canQueue || status === "loading"} className={`${btn} bg-[#2ec4b6] text-[#05040a] hover:bg-[#43d6c8]`}>Queue run</button>
-              <button type="button" onClick={publishToGhost} disabled={status === "loading"} className={`${btn} bg-[#8a5cff] text-[#fbf4e6] hover:bg-[#9d75ff]`}>Publish to Ghost</button>
+            <div className="mt-4 rounded-xl border border-[#2e2640] bg-[#0c0a12] p-3 text-xs text-[#b3a7c4]">
+              {activeCharacter ? (
+                <>Scene will keep <span className="font-bold text-[#8a5cff]">{activeCharacter.name}</span> consistent via the saved reference.</>
+              ) : (
+                <>No active character — this generates a fresh image. Select a hero in Cast for consistency.</>
+              )}
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" onClick={generateScene} disabled={!canScene || status === "loading"} className={`${btn} bg-[#ff5a3c] text-[#fbf4e6] hover:bg-[#ff7259]`}>
+                Generate scene
+              </button>
             </div>
 
             {message ? <div className={`mt-4 rounded-xl border px-3 py-2 text-sm font-medium ${feedbackColor}`} role="status">{message}</div> : null}
           </section>
 
-          {/* Frames gallery — the centerpiece */}
+          {/* ACTIVE REFERENCE preview */}
+          <aside className={`${panel} overflow-hidden border-t-4 border-t-[#2ec4b6] xl:col-span-4`}>
+            <div className="flex items-center justify-between p-6 pb-3">
+              <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Reference</h2>
+              <span className="rounded-full bg-[#2ec4b6] px-2 py-0.5 text-[10px] font-black uppercase text-[#05040a]">model sheet</span>
+            </div>
+            <div className="relative flex min-h-64 items-center justify-center border-t border-[#2e2640] bg-[#0c0a12]">
+              {activeCharacter ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={activeCharacter.referenceUrl} alt={activeCharacter.name} className="h-full w-full object-contain" />
+              ) : (
+                <p className="px-6 text-center text-xs text-[#6b6480]">Select or create a character to lock a reference.</p>
+              )}
+            </div>
+          </aside>
+
+          {/* FRAMES */}
           <section id="frames" className={`${panel} border-t-4 border-t-[#ffd23f] p-6 xl:col-span-8`}>
             <div className="flex items-center justify-between gap-3">
               <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Frames</h2>
@@ -395,15 +376,9 @@ export const AppShell = () => {
                 <button type="button" onClick={() => setFrames([])} className="rounded-full border border-[#2e2640] px-3 py-1 text-[11px] font-bold uppercase text-[#b3a7c4] transition hover:text-[#fbf4e6]">Clear</button>
               ) : null}
             </div>
-
             {frames.length === 0 ? (
-              <div className="mt-4 flex min-h-72 flex-col items-center justify-center rounded-xl border border-dashed border-[#2e2640] bg-[#0c0a12] text-center">
-                <div className="flex h-24 w-40 items-center justify-center">
-                  <span className="h-16 w-16 -rotate-6 rounded-2xl border-[3px] border-[#05040a] bg-[#8a5cff]" />
-                  <span className="-ml-6 h-16 w-16 rotate-3 rounded-2xl border-[3px] border-[#05040a] bg-[#ff5a3c]" />
-                  <span className="-ml-6 h-16 w-16 -rotate-3 rounded-2xl border-[3px] border-[#05040a] bg-[#2ec4b6]" />
-                </div>
-                <p className="mt-4 text-sm text-[#6b6480]">Generated frames land here. Compose a scene and hit Generate.</p>
+              <div className="mt-4 flex min-h-64 items-center justify-center rounded-xl border border-dashed border-[#2e2640] bg-[#0c0a12] text-center">
+                <p className="px-6 text-sm text-[#6b6480]">Generated scenes land here, tagged with the character used.</p>
               </div>
             ) : (
               <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
@@ -412,7 +387,11 @@ export const AppShell = () => {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={frame.url} alt={frame.prompt} className="aspect-square w-full object-cover" />
                     <figcaption className="flex items-center justify-between gap-2 p-3">
-                      <span className="rounded-full px-2 py-0.5 text-[10px] font-black uppercase text-[#05040a]" style={{ background: frame.provider === "kie" ? "#ffd23f" : "#2ec4b6" }}>{frame.provider}</span>
+                      {frame.characterName ? (
+                        <span className="rounded-full bg-[#8a5cff] px-2 py-0.5 text-[10px] font-black uppercase text-[#fbf4e6]">{frame.characterName}</span>
+                      ) : (
+                        <span className="rounded-full bg-[#2e2640] px-2 py-0.5 text-[10px] font-black uppercase text-[#b3a7c4]">no char</span>
+                      )}
                       <div className="flex gap-2">
                         <a href={frame.url} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-[#2ec4b6] hover:underline">Open</a>
                         <a href={frame.url} download className="text-xs font-bold text-[#ffd23f] hover:underline">Download</a>
@@ -424,12 +403,17 @@ export const AppShell = () => {
             )}
           </section>
 
-          {/* Runs */}
-          <aside id="runs" className={`${panel} border-t-4 border-t-[#2ec4b6] p-6 xl:col-span-4`}>
-            <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Runs</h2>
+          {/* WORKSPACE (Convex-backed, optional) */}
+          <aside className={`${panel} border-t-4 border-t-[#2ec4b6] p-6 xl:col-span-4`}>
+            <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Workspace</h2>
+            <p className="mt-1 text-xs text-[#6b6480]">Optional Convex-backed run log.</p>
+            <div className="mt-3 flex gap-2">
+              <button type="button" onClick={bootstrapWorkspace} disabled={status === "loading"} className={`${btn} bg-[#ffd23f] text-[#05040a] hover:bg-[#ffdd66]`}>{isReady ? "Re-bootstrap" : "Bootstrap"}</button>
+              <button type="button" onClick={() => loadRuns()} disabled={!isReady || status === "loading"} className={`${btn} border border-[#2e2640] bg-transparent text-[#fbf4e6] hover:bg-[#181320]`}>Refresh</button>
+            </div>
             <div className="mt-4 space-y-2">
               {!isReady ? (
-                <p className="text-sm text-[#6b6480]">Bootstrap to load runs.</p>
+                <p className="text-sm text-[#6b6480]">Not connected.</p>
               ) : runs.length === 0 ? (
                 <p className="text-sm text-[#6b6480]">No runs yet.</p>
               ) : (
@@ -439,7 +423,6 @@ export const AppShell = () => {
                       <h3 className="text-sm font-bold text-[#fbf4e6]">{run.input.title}</h3>
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${statusColor[run.status]}`}>{run.status}</span>
                     </div>
-                    {run.input.storyBeat ? <p className="mt-1 line-clamp-2 text-xs text-[#b3a7c4]">{run.input.storyBeat}</p> : null}
                     <p className="mt-2 text-[11px] text-[#6b6480]">{new Date(run.createdAt).toLocaleString()}</p>
                   </article>
                 ))
@@ -447,8 +430,8 @@ export const AppShell = () => {
             </div>
           </aside>
 
-          {/* Workflows */}
-          <section id="workflows" className="grid gap-5 xl:col-span-8 xl:grid-cols-2">
+          {/* WORKFLOWS */}
+          <section id="workflows" className="grid gap-5 xl:col-span-12 xl:grid-cols-2">
             {[
               { title: "Hero workflow", accent: "#8a5cff", chip: "Production", steps: heroFightLeagueTemplate.steps },
               { title: "Front-end design workflow", accent: "#ffd23f", chip: "Design", steps: frontEndDesignTemplate.steps },

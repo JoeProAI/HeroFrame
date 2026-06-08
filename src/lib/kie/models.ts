@@ -9,8 +9,10 @@ const imageModels: Record<KieSpeed, string> = {
   quality: "gpt-image-2-text-to-image",
 };
 
+// All edit/character-reference work uses gpt-image-2-image-to-image so the
+// `input_urls` reference contract stays consistent across speeds.
 const imageEditModels: Record<KieSpeed, string> = {
-  fast: "google/nano-banana-edit",
+  fast: "gpt-image-2-image-to-image",
   balanced: "gpt-image-2-image-to-image",
   quality: "gpt-image-2-image-to-image",
 };
