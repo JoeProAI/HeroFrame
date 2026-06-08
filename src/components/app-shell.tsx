@@ -4,12 +4,22 @@ import { useMemo, useState } from "react";
 import { frontEndDesignTemplate, heroFightLeagueTemplate } from "@/lib/workflow-templates";
 
 type PipelineStatus = "idle" | "loading" | "success" | "error";
+type Provider = "kie" | "wavespeed";
+type Speed = "fast" | "balanced" | "quality";
 
 type RunSummary = {
   _id: string;
   status: "queued" | "running" | "succeeded" | "failed";
   createdAt: number;
   input: { title: string; storyBeat: string; styleHint?: string };
+};
+
+type Frame = {
+  id: string;
+  url: string;
+  prompt: string;
+  provider: Provider;
+  createdAt: number;
 };
 
 type BootstrapPayload = {
@@ -28,20 +38,20 @@ const statusColor: Record<RunSummary["status"], string> = {
 };
 
 const panel = "rounded-2xl border border-[#2e2640] bg-[#181320]";
-const label = "text-[11px] font-bold uppercase tracking-[0.16em] text-[#b3a7c4]";
+const labelCls = "text-[11px] font-bold uppercase tracking-[0.16em] text-[#b3a7c4]";
 const field =
   "min-h-11 w-full rounded-xl border border-[#2e2640] bg-[#0c0a12] px-3 text-sm text-[#fbf4e6] placeholder:text-[#6b6480] outline-none transition focus-visible:border-[#ffd23f] focus-visible:ring-1 focus-visible:ring-[#ffd23f]";
 const btn =
   "inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-bold transition hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffd23f] disabled:cursor-not-allowed disabled:opacity-40 disabled:translate-y-0";
 
-const isImageUrl = (url: string): boolean => /\.(png|jpe?g|webp|gif|avif)(\?|$)/i.test(url);
-
 const navItems = [
   { id: "compose", label: "Compose", dot: "#ff5a3c" },
+  { id: "frames", label: "Frames", dot: "#ffd23f" },
   { id: "runs", label: "Runs", dot: "#2ec4b6" },
   { id: "workflows", label: "Workflows", dot: "#8a5cff" },
-  { id: "art", label: "Art", dot: "#ffd23f" },
 ];
+
+const speeds: Speed[] = ["fast", "balanced", "quality"];
 
 export const AppShell = () => {
   const [bootstrap, setBootstrap] = useState<BootstrapPayload | null>(null);
@@ -49,12 +59,23 @@ export const AppShell = () => {
   const [sceneTitle, setSceneTitle] = useState("");
   const [storyBeat, setStoryBeat] = useState("");
   const [styleHint, setStyleHint] = useState("");
+  const [provider, setProvider] = useState<Provider>("kie");
+  const [speed, setSpeed] = useState<Speed>("balanced");
   const [status, setStatus] = useState<PipelineStatus>("idle");
   const [message, setMessage] = useState("");
-  const [resultUrl, setResultUrl] = useState("");
+  const [frames, setFrames] = useState<Frame[]>([]);
 
   const isReady = useMemo(() => bootstrap !== null, [bootstrap]);
   const canQueue = isReady && sceneTitle.trim().length > 0 && storyBeat.trim().length > 0;
+  const canGenerate = sceneTitle.trim().length > 0 && storyBeat.trim().length > 0;
+
+  const addFrame = (url: string, prompt: string, usedProvider: Provider) => {
+    if (!url) return;
+    setFrames((prev) => [
+      { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, url, prompt, provider: usedProvider, createdAt: Date.now() },
+      ...prev,
+    ]);
+  };
 
   const bootstrapWorkspace = async () => {
     setStatus("loading");
@@ -127,7 +148,12 @@ export const AppShell = () => {
     }
   };
 
-  const pollKieTask = async (taskId: string) => {
+  const prompt = useMemo(
+    () => [sceneTitle.trim(), storyBeat.trim()].filter(Boolean).join(". "),
+    [sceneTitle, storyBeat],
+  );
+
+  const pollKieTask = async (taskId: string, promptText: string) => {
     const deadline = Date.now() + 120_000;
     while (Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 3_000));
@@ -138,7 +164,7 @@ export const AppShell = () => {
           | null;
         if (!response.ok || !payload?.ok) continue;
         if (payload.state === "success") {
-          setResultUrl(payload.resultUrl ?? "");
+          addFrame(payload.resultUrl ?? "", promptText, "kie");
           setStatus("success");
           setMessage(payload.resultUrl ? "Frame ready." : "Task finished without a result URL.");
           return;
@@ -148,57 +174,75 @@ export const AppShell = () => {
           setMessage(payload.failMsg ?? "Generation failed.");
           return;
         }
-        setMessage(`Generating frame... (${payload.state ?? "working"})`);
+        setMessage(`Generating frame via Kie... (${payload.state ?? "working"})`);
       } catch {
-        // transient; keep polling until the deadline
+        // transient; keep polling
       }
     }
     setStatus("error");
-    setMessage("Timed out waiting for the frame. Try Refresh later.");
+    setMessage("Timed out waiting for the frame.");
+  };
+
+  const generateViaKie = async (promptText: string) => {
+    const response = await fetch("/api/kie/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "image", speed, prompt: promptText, styleHint: styleHint || undefined }),
+    });
+    const payload = (await response.json().catch(() => null)) as
+      | { ok?: boolean; error?: string; taskId?: string; state?: string; resultUrl?: string; failMsg?: string }
+      | null;
+    if (!response.ok || !payload?.ok) throw new Error(payload?.error ?? `Kie request failed (HTTP ${response.status}).`);
+    if (payload.state === "fail") throw new Error(payload.failMsg ?? "Generation failed.");
+    if (payload.resultUrl) {
+      addFrame(payload.resultUrl, promptText, "kie");
+      setStatus("success");
+      setMessage("Frame ready.");
+      return;
+    }
+    if (payload.taskId) {
+      setMessage("Generating frame via Kie...");
+      await pollKieTask(payload.taskId, promptText);
+    }
+  };
+
+  const generateViaWaveSpeed = async (promptText: string) => {
+    const response = await fetch("/api/wavespeed/orchestrate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "image", prompt: promptText, styleHint: styleHint || undefined, strategy: { speed, async: true } }),
+    });
+    const payload = (await response.json().catch(() => null)) as
+      | { ok?: boolean; error?: unknown; data?: { output?: string; data?: { outputs?: Array<{ url?: string }> } } }
+      | null;
+    if (!response.ok || !payload?.ok) {
+      throw new Error(typeof payload?.error === "string" ? payload.error : `WaveSpeed request failed (HTTP ${response.status}).`);
+    }
+    const url = payload.data?.output ?? payload.data?.data?.outputs?.at(0)?.url ?? "";
+    if (url) {
+      addFrame(url, promptText, "wavespeed");
+      setStatus("success");
+      setMessage("Frame ready.");
+    } else {
+      setStatus("success");
+      setMessage("WaveSpeed accepted the job; result will arrive via webhook.");
+    }
   };
 
   const generateFrame = async () => {
-    if (!sceneTitle.trim() || !storyBeat.trim()) {
+    if (!canGenerate) {
       setStatus("error");
       setMessage("Add a scene title and story beat first.");
       return;
     }
     setStatus("loading");
-    setMessage("Sending request to Kie...");
-    setResultUrl("");
+    setMessage(`Sending request to ${provider === "kie" ? "Kie" : "WaveSpeed"}...`);
     try {
-      const response = await fetch("/api/kie/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode: "image",
-          speed: "balanced",
-          prompt: `${sceneTitle}. ${storyBeat}`,
-          styleHint: styleHint || undefined,
-        }),
-      });
-      const payload = (await response.json().catch(() => null)) as
-        | { ok?: boolean; error?: string; taskId?: string; state?: string; pending?: boolean; resultUrl?: string; failMsg?: string }
-        | null;
-      if (!response.ok || !payload?.ok) {
-        throw new Error(payload?.error ?? `Kie request failed (HTTP ${response.status}).`);
-      }
-      if (payload.state === "fail") {
-        throw new Error(payload.failMsg ?? "Generation failed.");
-      }
-      if (payload.resultUrl) {
-        setResultUrl(payload.resultUrl);
-        setStatus("success");
-        setMessage("Frame ready.");
-        return;
-      }
-      if (payload.taskId) {
-        setMessage("Generating frame...");
-        await pollKieTask(payload.taskId);
-      }
+      if (provider === "kie") await generateViaKie(prompt);
+      else await generateViaWaveSpeed(prompt);
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Kie request failed.");
+      setMessage(error instanceof Error ? error.message : "Generation failed.");
     }
   };
 
@@ -210,22 +254,16 @@ export const AppShell = () => {
     }
     setStatus("loading");
     setMessage("Publishing draft to Ghost...");
-    setResultUrl("");
     try {
       const response = await fetch("/api/ghost/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: sceneTitle, storyBeat, styleHint: styleHint || undefined, status: "draft" }),
       });
-      const payload = (await response.json().catch(() => null)) as
-        | { ok?: boolean; post?: { url: string }; error?: string }
-        | null;
-      if (!response.ok || !payload?.ok) {
-        throw new Error(payload?.error ?? `Ghost publish failed (HTTP ${response.status}).`);
-      }
-      setResultUrl(payload.post?.url ?? "");
+      const payload = (await response.json().catch(() => null)) as { ok?: boolean; post?: { url: string }; error?: string } | null;
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error ?? `Ghost publish failed (HTTP ${response.status}).`);
       setStatus("success");
-      setMessage("Draft published to Ghost.");
+      setMessage(payload.post?.url ? `Draft published: ${payload.post.url}` : "Draft published to Ghost.");
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Ghost publish failed.");
@@ -245,132 +283,149 @@ export const AppShell = () => {
   return (
     <div className="flex min-h-screen w-full">
       {/* SIDEBAR */}
-      <aside className="sticky top-0 hidden h-screen w-64 flex-none flex-col border-r border-[#2e2640] bg-[#0c0a12]/80 p-5 lg:flex">
+      <aside className="sticky top-0 hidden h-screen w-60 flex-none flex-col border-r border-[#2e2640] bg-[#0c0a12]/80 p-5 lg:flex">
         <div className="flex items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#ff5a3c] font-[family-name:var(--font-bricolage)] text-lg font-black text-[#05040a]">
-            H
-          </span>
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#ff5a3c] font-[family-name:var(--font-bricolage)] text-lg font-black text-[#05040a]">H</span>
           <div>
             <p className="font-[family-name:var(--font-bricolage)] text-base font-black leading-none">Heroframe</p>
             <p className="text-[10px] uppercase tracking-[0.18em] text-[#6b6480]">Cartoon maker</p>
           </div>
         </div>
-
         <nav className="mt-8 flex flex-col gap-1">
           {navItems.map((item) => (
-            <a
-              key={item.id}
-              href={`#${item.id}`}
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-[#b3a7c4] transition hover:bg-[#181320] hover:text-[#fbf4e6]"
-            >
+            <a key={item.id} href={`#${item.id}`} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-[#b3a7c4] transition hover:bg-[#181320] hover:text-[#fbf4e6]">
               <span className="h-2.5 w-2.5 rounded-full" style={{ background: item.dot }} />
               {item.label}
             </a>
           ))}
         </nav>
-
         <div className="mt-auto rounded-xl border border-[#2e2640] bg-[#181320] p-3">
           <div className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full" style={{ background: statusDot }} />
             <p className="text-xs font-semibold text-[#fbf4e6]">{status}</p>
           </div>
-          <p className="mt-1 text-[11px] leading-4 text-[#6b6480]">
-            {isReady ? "Workspace connected." : "Not bootstrapped yet."}
-          </p>
+          <p className="mt-1 text-[11px] leading-4 text-[#6b6480]">{frames.length} frame{frames.length === 1 ? "" : "s"} this session</p>
         </div>
       </aside>
 
       {/* MAIN */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* TOP BAR */}
         <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-[#2e2640] bg-[#0c0a12]/85 px-5 py-3 backdrop-blur sm:px-8">
           <div className="flex items-center gap-3">
-            <span className="rounded-full bg-[#ffd23f] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#05040a]">
-              Ages of Cartoons
-            </span>
-            <h1 className="font-[family-name:var(--font-bricolage)] text-lg font-black uppercase tracking-tight sm:text-xl">
-              Production Workspace
-            </h1>
+            <span className="rounded-full bg-[#ffd23f] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#05040a]">Ages of Cartoons</span>
+            <h1 className="font-[family-name:var(--font-bricolage)] text-lg font-black uppercase tracking-tight sm:text-xl">Production Workspace</h1>
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={bootstrapWorkspace} disabled={status === "loading"} className={`${btn} bg-[#ffd23f] text-[#05040a] hover:bg-[#ffdd66]`}>
-              {isReady ? "Re-bootstrap" : "Bootstrap"}
-            </button>
-            <button type="button" onClick={() => loadRuns()} disabled={!isReady || status === "loading"} className={`${btn} border border-[#2e2640] bg-transparent text-[#fbf4e6] hover:bg-[#181320]`}>
-              Refresh
-            </button>
+            <button type="button" onClick={bootstrapWorkspace} disabled={status === "loading"} className={`${btn} bg-[#ffd23f] text-[#05040a] hover:bg-[#ffdd66]`}>{isReady ? "Re-bootstrap" : "Bootstrap"}</button>
+            <button type="button" onClick={() => loadRuns()} disabled={!isReady || status === "loading"} className={`${btn} border border-[#2e2640] bg-transparent text-[#fbf4e6] hover:bg-[#181320]`}>Refresh</button>
           </div>
         </header>
 
-        {/* CONTENT — full width 12-col grid */}
         <div className="grid flex-1 grid-cols-1 gap-5 p-5 sm:p-8 xl:grid-cols-12">
           {/* Compose */}
-          <section id="compose" className={`${panel} border-t-4 border-t-[#ff5a3c] p-6 xl:col-span-5`}>
+          <section id="compose" className={`${panel} border-t-4 border-t-[#ff5a3c] p-6 xl:col-span-4`}>
             <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Compose</h2>
             <div className="mt-4 grid gap-3">
               <div className="grid gap-2">
-                <label className={label} htmlFor="scene-title">Scene title</label>
+                <label className={labelCls} htmlFor="scene-title">Scene title</label>
                 <input id="scene-title" value={sceneTitle} onChange={(e) => setSceneTitle(e.target.value)} placeholder="e.g. Rooftop duel at dusk" className={field} />
               </div>
               <div className="grid gap-2">
-                <label className={label} htmlFor="story-beat">Story beat</label>
-                <textarea id="story-beat" value={storyBeat} onChange={(e) => setStoryBeat(e.target.value)} placeholder="What happens in this scene?" className={`${field} min-h-36 py-2`} />
+                <label className={labelCls} htmlFor="story-beat">Story beat</label>
+                <textarea id="story-beat" value={storyBeat} onChange={(e) => setStoryBeat(e.target.value)} placeholder="What happens in this scene?" className={`${field} min-h-28 py-2`} />
               </div>
               <div className="grid gap-2">
-                <label className={label} htmlFor="style-hint">Style hint (optional)</label>
+                <label className={labelCls} htmlFor="style-hint">Style hint (optional)</label>
                 <input id="style-hint" value={styleHint} onChange={(e) => setStyleHint(e.target.value)} placeholder="e.g. bold outlines, saturated color" className={field} />
+              </div>
+
+              {/* Provider selector */}
+              <div className="grid gap-2">
+                <span className={labelCls}>Provider</span>
+                <div className="flex gap-2">
+                  {(["kie", "wavespeed"] as Provider[]).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setProvider(p)}
+                      className={`flex-1 rounded-xl border px-3 py-2 text-sm font-bold capitalize transition ${
+                        provider === p ? "border-[#ffd23f] bg-[#ffd23f] text-[#05040a]" : "border-[#2e2640] bg-[#0c0a12] text-[#b3a7c4] hover:text-[#fbf4e6]"
+                      }`}
+                    >
+                      {p === "kie" ? "Kie" : "WaveSpeed"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Speed selector */}
+              <div className="grid gap-2">
+                <span className={labelCls}>Quality / speed</span>
+                <div className="flex gap-2">
+                  {speeds.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setSpeed(s)}
+                      className={`flex-1 rounded-xl border px-3 py-2 text-xs font-bold capitalize transition ${
+                        speed === s ? "border-[#2ec4b6] bg-[#2ec4b6] text-[#05040a]" : "border-[#2e2640] bg-[#0c0a12] text-[#b3a7c4] hover:text-[#fbf4e6]"
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
             <div className="mt-5 flex flex-wrap gap-2">
-              <button type="button" onClick={queueRun} disabled={!canQueue || status === "loading"} className={`${btn} bg-[#2ec4b6] text-[#05040a] hover:bg-[#43d6c8]`}>
-                Queue run
-              </button>
-              <button type="button" onClick={generateFrame} disabled={status === "loading"} className={`${btn} bg-[#ff5a3c] text-[#fbf4e6] hover:bg-[#ff7259]`}>
-                Generate frame
-              </button>
-              <button type="button" onClick={publishToGhost} disabled={status === "loading"} className={`${btn} bg-[#8a5cff] text-[#fbf4e6] hover:bg-[#9d75ff]`}>
-                Publish to Ghost
-              </button>
+              <button type="button" onClick={generateFrame} disabled={!canGenerate || status === "loading"} className={`${btn} bg-[#ff5a3c] text-[#fbf4e6] hover:bg-[#ff7259]`}>Generate frame</button>
+              <button type="button" onClick={queueRun} disabled={!canQueue || status === "loading"} className={`${btn} bg-[#2ec4b6] text-[#05040a] hover:bg-[#43d6c8]`}>Queue run</button>
+              <button type="button" onClick={publishToGhost} disabled={status === "loading"} className={`${btn} bg-[#8a5cff] text-[#fbf4e6] hover:bg-[#9d75ff]`}>Publish to Ghost</button>
             </div>
 
-            {message ? (
-              <div className={`mt-4 rounded-xl border px-3 py-2 text-sm font-medium ${feedbackColor}`} role="status">
-                {message}
-              </div>
-            ) : null}
-            {resultUrl ? (
-              <a href={resultUrl} target="_blank" rel="noopener noreferrer" className="mt-2 block break-all text-sm font-medium text-[#2ec4b6] underline-offset-4 hover:underline">
-                {resultUrl}
-              </a>
-            ) : null}
+            {message ? <div className={`mt-4 rounded-xl border px-3 py-2 text-sm font-medium ${feedbackColor}`} role="status">{message}</div> : null}
           </section>
 
-          {/* Art preview */}
-          <section id="art" className={`${panel} overflow-hidden border-t-4 border-t-[#ffd23f] xl:col-span-4`}>
-            <div className="flex items-center justify-between p-6 pb-3">
-              <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Art preview</h2>
-              <span className="rounded-full bg-[#ffd23f] px-2 py-0.5 text-[10px] font-black uppercase text-[#05040a]">frame</span>
+          {/* Frames gallery — the centerpiece */}
+          <section id="frames" className={`${panel} border-t-4 border-t-[#ffd23f] p-6 xl:col-span-8`}>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Frames</h2>
+              {frames.length > 0 ? (
+                <button type="button" onClick={() => setFrames([])} className="rounded-full border border-[#2e2640] px-3 py-1 text-[11px] font-bold uppercase text-[#b3a7c4] transition hover:text-[#fbf4e6]">Clear</button>
+              ) : null}
             </div>
-            <div className="relative flex h-[calc(100%-72px)] min-h-64 items-center justify-center border-t border-[#2e2640] bg-[#0c0a12]">
-              {resultUrl && isImageUrl(resultUrl) ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={resultUrl} alt="Generated frame preview" className="h-full w-full object-cover" />
-              ) : (
-                <div className="px-6 text-center">
-                  <div className="mx-auto flex h-28 w-44 items-center justify-center">
-                    <span className="h-20 w-20 -rotate-6 rounded-2xl border-[3px] border-[#05040a] bg-[#8a5cff]" />
-                    <span className="-ml-8 h-20 w-20 rotate-3 rounded-2xl border-[3px] border-[#05040a] bg-[#ff5a3c]" />
-                    <span className="-ml-8 h-20 w-20 -rotate-3 rounded-2xl border-[3px] border-[#05040a] bg-[#2ec4b6]" />
-                  </div>
-                  <p className="mt-4 text-xs text-[#6b6480]">Generate a frame to preview it here.</p>
+
+            {frames.length === 0 ? (
+              <div className="mt-4 flex min-h-72 flex-col items-center justify-center rounded-xl border border-dashed border-[#2e2640] bg-[#0c0a12] text-center">
+                <div className="flex h-24 w-40 items-center justify-center">
+                  <span className="h-16 w-16 -rotate-6 rounded-2xl border-[3px] border-[#05040a] bg-[#8a5cff]" />
+                  <span className="-ml-6 h-16 w-16 rotate-3 rounded-2xl border-[3px] border-[#05040a] bg-[#ff5a3c]" />
+                  <span className="-ml-6 h-16 w-16 -rotate-3 rounded-2xl border-[3px] border-[#05040a] bg-[#2ec4b6]" />
                 </div>
-              )}
-            </div>
+                <p className="mt-4 text-sm text-[#6b6480]">Generated frames land here. Compose a scene and hit Generate.</p>
+              </div>
+            ) : (
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+                {frames.map((frame) => (
+                  <figure key={frame.id} className="overflow-hidden rounded-xl border border-[#2e2640] bg-[#0c0a12]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={frame.url} alt={frame.prompt} className="aspect-square w-full object-cover" />
+                    <figcaption className="flex items-center justify-between gap-2 p-3">
+                      <span className="rounded-full px-2 py-0.5 text-[10px] font-black uppercase text-[#05040a]" style={{ background: frame.provider === "kie" ? "#ffd23f" : "#2ec4b6" }}>{frame.provider}</span>
+                      <div className="flex gap-2">
+                        <a href={frame.url} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-[#2ec4b6] hover:underline">Open</a>
+                        <a href={frame.url} download className="text-xs font-bold text-[#ffd23f] hover:underline">Download</a>
+                      </div>
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* Runs */}
-          <aside id="runs" className={`${panel} border-t-4 border-t-[#2ec4b6] p-6 xl:col-span-3`}>
+          <aside id="runs" className={`${panel} border-t-4 border-t-[#2ec4b6] p-6 xl:col-span-4`}>
             <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Runs</h2>
             <div className="mt-4 space-y-2">
               {!isReady ? (
@@ -382,9 +437,7 @@ export const AppShell = () => {
                   <article key={run._id} className="rounded-xl border border-[#2e2640] bg-[#0c0a12] p-3">
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="text-sm font-bold text-[#fbf4e6]">{run.input.title}</h3>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${statusColor[run.status]}`}>
-                        {run.status}
-                      </span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${statusColor[run.status]}`}>{run.status}</span>
                     </div>
                     {run.input.storyBeat ? <p className="mt-1 line-clamp-2 text-xs text-[#b3a7c4]">{run.input.storyBeat}</p> : null}
                     <p className="mt-2 text-[11px] text-[#6b6480]">{new Date(run.createdAt).toLocaleString()}</p>
@@ -394,25 +447,21 @@ export const AppShell = () => {
             </div>
           </aside>
 
-          {/* Workflows — span full width */}
-          <section id="workflows" className="grid gap-5 xl:col-span-12 xl:grid-cols-2">
+          {/* Workflows */}
+          <section id="workflows" className="grid gap-5 xl:col-span-8 xl:grid-cols-2">
             {[
               { title: "Hero workflow", accent: "#8a5cff", chip: "Production", steps: heroFightLeagueTemplate.steps },
               { title: "Front-end design workflow", accent: "#ffd23f", chip: "Design", steps: frontEndDesignTemplate.steps },
             ].map((workflow) => (
               <div key={workflow.title} className={`${panel} p-6`} style={{ borderTop: `4px solid ${workflow.accent}` }}>
                 <div className="flex items-center justify-between gap-3">
-                  <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">{workflow.title}</h2>
-                  <span className="rounded-full px-2.5 py-1 text-[10px] font-black uppercase text-[#05040a]" style={{ background: workflow.accent }}>
-                    {workflow.chip}
-                  </span>
+                  <h2 className="font-[family-name:var(--font-bricolage)] text-lg font-extrabold">{workflow.title}</h2>
+                  <span className="rounded-full px-2.5 py-1 text-[10px] font-black uppercase text-[#05040a]" style={{ background: workflow.accent }}>{workflow.chip}</span>
                 </div>
-                <ol className="mt-4 grid gap-1.5 sm:grid-cols-2">
+                <ol className="mt-4 grid gap-1.5">
                   {workflow.steps.map((step, index) => (
                     <li key={step.id} className="flex items-center gap-3 rounded-lg border border-[#2e2640] bg-[#0c0a12] px-3 py-2">
-                      <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full text-[11px] font-black text-[#05040a]" style={{ background: workflow.accent }}>
-                        {index + 1}
-                      </span>
+                      <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full text-[11px] font-black text-[#05040a]" style={{ background: workflow.accent }}>{index + 1}</span>
                       <span className="flex-1 text-sm text-[#fbf4e6]">{step.label}</span>
                       {!step.required ? <span className="text-[10px] uppercase text-[#6b6480]">opt</span> : null}
                     </li>
