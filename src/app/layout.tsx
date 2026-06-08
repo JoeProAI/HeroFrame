@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, JetBrains_Mono, Space_Grotesk } from "next/font/google";
+import { Bricolage_Grotesque, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -7,8 +7,8 @@ const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
 });
 
-const cormorantGaramond = Cormorant_Garamond({
-  variable: "--font-cormorant-garamond",
+const bricolage = Bricolage_Grotesque({
+  variable: "--font-bricolage",
   subsets: ["latin"],
 });
 
@@ -19,7 +19,7 @@ const jetBrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Heroframe",
-  description: "Production control room for cinematic cartoon workflows.",
+  description: "Ages of Cartoons. A cartoon maker at heart.",
 };
 
 export default function RootLayout({
@@ -30,7 +30,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${spaceGrotesk.variable} ${cormorantGaramond.variable} ${jetBrainsMono.variable} h-full antialiased`}
+      className={`${spaceGrotesk.variable} ${bricolage.variable} ${jetBrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

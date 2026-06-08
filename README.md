@@ -47,6 +47,9 @@ copy .env.example .env.local
 - `WAVESPEED_API_BASE_URL` (optional, defaults to `https://api.wavespeed.ai`)
 - `WAVESPEED_CALLBACK_BASE_URL` (optional but recommended, used to attach webhook URL)
 - `WAVESPEED_WEBHOOK_SECRET` (optional, recommended for webhook signature verification)
+- `GHOST_API_URL` (e.g. `https://joepro-press.ghost.io`)
+- `GHOST_ADMIN_API_KEY` (server-only, `id:secret` format)
+- `GHOST_CONTENT_API_KEY` (optional, read-only)
 
 4. Run Convex dev backend:
 
