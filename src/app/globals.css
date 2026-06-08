@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --color-bg: #090d1d;
-  --color-bg-soft: #121b3d;
-  --color-surface: #121935;
-  --color-text: #eef3ff;
-  --color-muted: #9faad0;
-  --color-border: #2a3e78;
-  --color-accent: #e8a832;
-  --color-accent-strong: #f6c25b;
-  --color-focus: #ffcd70;
-  --color-success: #34d399;
-  --color-warning: #fbbf24;
-  --color-danger: #f87171;
+  --color-bg: #0c111e;
+  --color-bg-soft: #151d32;
+  --color-surface: #121827;
+  --color-text: #f5efdf;
+  --color-muted: #b6ae96;
+  --color-border: #3f3a2c;
+  --color-accent: #d6a853;
+  --color-accent-strong: #f0c87b;
+  --color-focus: #f4d28a;
+  --color-success: #65c9a3;
+  --color-warning: #e4ba68;
+  --color-danger: #e88f82;
 }
 
 @theme inline {
@@ -24,8 +24,8 @@
 
 body {
   background:
-    radial-gradient(1500px 720px at 80% -10%, #354fa355, transparent 65%),
-    radial-gradient(900px 500px at -5% 105%, #e8a83220, transparent 55%),
+    radial-gradient(1200px 620px at 85% -5%, #2f478766, transparent 70%),
+    radial-gradient(900px 500px at -5% 105%, #d6a85326, transparent 58%),
     linear-gradient(180deg, var(--color-bg-soft) 0%, var(--color-bg) 100%);
   color: var(--color-text);
   font-family: var(--font-space-grotesk), sans-serif;
