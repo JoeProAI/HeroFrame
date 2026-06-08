@@ -17,14 +17,18 @@ export const heroFightLeagueTemplate: WorkflowTemplate = {
 export const frontEndDesignTemplate: WorkflowTemplate = {
   name: "Heroframe UI System v1",
   key: "heroframe-ui-system",
-  version: 1,
+  version: 2,
   steps: [
-    { id: "intent", label: "Art Direction Intent", kind: "design", required: true },
-    { id: "tokens", label: "Token System Draft", kind: "design", required: true },
-    { id: "layout", label: "Layout Composition", kind: "design", required: true },
-    { id: "states", label: "Interaction State Pass", kind: "design", required: true },
-    { id: "accessibility", label: "Keyboard and Focus QA", kind: "review", required: true },
-    { id: "handoff", label: "UI Handoff Snapshot", kind: "asset", required: false },
+    { id: "context", label: "Context and Constraints Capture", kind: "brief", required: true },
+    { id: "direction", label: "Radical Art Direction Selection", kind: "design", required: true },
+    { id: "signature", label: "Signature Interaction Element", kind: "design", required: true },
+    { id: "tokens", label: "Design Token System Definition", kind: "design", required: true },
+    { id: "composition", label: "Layout and Typography Composition", kind: "design", required: true },
+    { id: "states", label: "Full Interaction States Pass", kind: "design", required: true },
+    { id: "accessibility", label: "Accessibility and Keyboard QA", kind: "review", required: true },
+    { id: "failure", label: "Failure and Recovery State Design", kind: "review", required: true },
+    { id: "quality-gate", label: "Narrative Consistency Quality Gate", kind: "review", required: true },
+    { id: "handoff", label: "Windsurf Handoff and Extension Notes", kind: "asset", required: false },
   ],
 };
 

@@ -79,6 +79,18 @@ This repo now includes a WaveSpeed integration that most teams skip:
 
 This gives you an edge because you are not making raw provider calls from the browser. You get deterministic orchestration, better failure handling, and a structure that can scale into multi-provider routing.
 
+## Windsurf design workflow
+
+- The front-end workflow has been upgraded to a stricter Windsurf-ready process in:
+  - `src/lib/workflow-templates.ts` (`heroframe-ui-system` v2)
+  - `WINDSURF_WORKFLOW_FRONTEND_DESIGN.md`
+- Use this workflow for every significant UI pass to enforce:
+  - one radical art direction
+  - signature element requirement
+  - token-first implementation
+  - full interaction + failure states
+  - narrative consistency quality gate
+
 ## Suggested next build steps
 
 1. Persist WaveSpeed job IDs + outputs on run records in Convex.
