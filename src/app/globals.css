@@ -1,11 +1,38 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 body {
-  background: #ffffff;
-  color: #18181b;
+  background:
+    radial-gradient(circle at 12% 8%, #8a5cff33, transparent 40%),
+    radial-gradient(circle at 88% 6%, #2ec4b633, transparent 38%),
+    radial-gradient(circle at 78% 96%, #ff5a3c2e, transparent 44%),
+    radial-gradient(circle at 20% 90%, #ffd23f24, transparent 40%),
+    #0c0a12;
+  color: #fbf4e6;
   font-family: var(--font-space-grotesk), system-ui, sans-serif;
+}
+
+/* halftone dot wash — the only texture, kept subtle */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: radial-gradient(#fbf4e6 1px, transparent 1.3px);
+  background-size: 18px 18px;
+}
+
+body > * {
+  position: relative;
+  z-index: 1;
+}
+
+::selection {
+  background: #ffd23f;
+  color: #05040a;
 }
