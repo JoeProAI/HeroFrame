@@ -5,6 +5,7 @@ import { runKieGeneration } from "@/lib/kie/run-client";
 import { useCharacters } from "@/lib/use-characters";
 import { useStylePresets } from "@/lib/use-style-presets";
 import { buildFightShots, expandShots } from "@/lib/shots";
+import { modelCatalog, defaultModel } from "@/lib/kie/models";
 
 type Status = "idle" | "loading" | "success" | "error";
 type Speed = "fast" | "balanced" | "quality";
@@ -48,6 +49,11 @@ export const AppShell = () => {
   const [frames, setFrames] = useState<Frame[]>([]);
   const [speed, setSpeed] = useState<Speed>("balanced");
 
+  // Model selection per mode
+  const [imageModel, setImageModel] = useState<string>(defaultModel.image);
+  const [editModel, setEditModel] = useState<string>(defaultModel["image-edit"]);
+  const [videoModel, setVideoModel] = useState<string>(defaultModel.video);
+
   // Cast creation
   const [charName, setCharName] = useState("");
   const [charPrompt, setCharPrompt] = useState("");
@@ -89,6 +95,7 @@ export const AppShell = () => {
         styleHint,
         speed,
         mode: "image",
+        model: imageModel,
         onProgress: (s) => setMessage(`Generating reference... (${s})`),
       });
       addCharacter(charName, url, charPrompt.trim());
@@ -122,6 +129,7 @@ export const AppShell = () => {
       styleHint,
       speed,
       mode: refs?.length ? "image-edit" : "image",
+      model: refs?.length ? editModel : imageModel,
       imageUrls: refs,
       onProgress: (s) => setMessage(`Working... (${s})`),
     });
@@ -215,6 +223,7 @@ export const AppShell = () => {
         prompt: `Animate this scene with subtle, natural motion. ${frame.prompt}`,
         speed: "fast",
         mode: "video",
+        model: videoModel,
         imageUrls: [frame.url],
         resolution: "720p",
         duration: "5",
@@ -272,17 +281,23 @@ export const AppShell = () => {
             <span className="rounded-full bg-[#ffd23f] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#05040a]">Ages of Cartoons</span>
             <h1 className="font-[family-name:var(--font-bricolage)] text-lg font-black uppercase tracking-tight sm:text-xl">Cartoon Studio</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Image model */}
+            <select value={imageModel} onChange={(e) => setImageModel(e.target.value)} title="Text-to-image model" className="min-h-9 rounded-lg border border-[#2e2640] bg-[#0c0a12] px-2 text-xs text-[#fbf4e6]">
+              {modelCatalog.image.map((m) => <option key={m.id} value={m.id}>img: {m.label}</option>)}
+            </select>
+            {/* Edit model */}
+            <select value={editModel} onChange={(e) => setEditModel(e.target.value)} title="Character-reference (image-to-image) model" className="min-h-9 rounded-lg border border-[#2e2640] bg-[#0c0a12] px-2 text-xs text-[#fbf4e6]">
+              {modelCatalog["image-edit"].map((m) => <option key={m.id} value={m.id}>ref: {m.label}</option>)}
+            </select>
+            {/* Video model */}
+            <select value={videoModel} onChange={(e) => setVideoModel(e.target.value)} title="Image-to-video model" className="min-h-9 rounded-lg border border-[#2e2640] bg-[#0c0a12] px-2 text-xs text-[#fbf4e6]">
+              {modelCatalog.video.map((m) => <option key={m.id} value={m.id}>vid: {m.label}</option>)}
+            </select>
             {/* Style preset selector */}
-            <select
-              value={presetId ?? ""}
-              onChange={(e) => setPresetId(e.target.value || null)}
-              className="min-h-9 rounded-lg border border-[#2e2640] bg-[#0c0a12] px-2 text-xs text-[#fbf4e6]"
-            >
+            <select value={presetId ?? ""} onChange={(e) => setPresetId(e.target.value || null)} title="Style preset" className="min-h-9 rounded-lg border border-[#2e2640] bg-[#0c0a12] px-2 text-xs text-[#fbf4e6]">
               <option value="">No style</option>
-              {presets.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
+              {presets.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
             <div className="flex gap-1">
               {speeds.map((s) => (

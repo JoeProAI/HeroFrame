@@ -6,6 +6,7 @@ export type RunKieParams = {
   styleHint?: string;
   speed?: "fast" | "balanced" | "quality";
   mode?: "image" | "image-edit" | "video";
+  model?: string;
   imageUrls?: string[];
   resolution?: string;
   duration?: string;
@@ -37,6 +38,7 @@ export const runKieGeneration = async (params: RunKieParams): Promise<string> =>
     body: JSON.stringify({
       mode: params.mode ?? "image",
       speed: params.speed ?? "balanced",
+      model: params.model || undefined,
       prompt: params.prompt,
       styleHint: params.styleHint || undefined,
       imageUrls: params.imageUrls,

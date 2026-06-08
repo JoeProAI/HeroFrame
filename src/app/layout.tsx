@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, JetBrains_Mono, Space_Grotesk } from "next/font/google";
+import { BackgroundArt } from "@/components/background-art";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -32,7 +33,10 @@ export default function RootLayout({
       lang="en"
       className={`${spaceGrotesk.variable} ${bricolage.variable} ${jetBrainsMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <BackgroundArt />
+        {children}
+      </body>
     </html>
   );
 }

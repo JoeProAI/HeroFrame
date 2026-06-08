@@ -29,3 +29,32 @@ export const resolveKieModel = (mode: KieMode, speed: KieSpeed = "balanced"): st
   if (mode === "video") return videoModels[speed];
   return imageModels[speed];
 };
+
+export type ModelOption = { id: string; label: string };
+
+// Curated catalog. Each list shares the param contract its mode uses
+// (image/edit: prompt [+ input_urls]; video: prompt + image_url). Only ids
+// confirmed against the Kie docs/live API are included so nothing silently fails.
+export const modelCatalog: Record<KieMode, ModelOption[]> = {
+  image: [
+    { id: "gpt-image-2-text-to-image", label: "GPT Image-2" },
+    { id: "google/nano-banana", label: "Nano Banana (fast)" },
+    { id: "grok-imagine/text-to-image", label: "Grok Imagine" },
+    { id: "qwen2/text-to-image", label: "Qwen2" },
+  ],
+  "image-edit": [
+    { id: "gpt-image-2-image-to-image", label: "GPT Image-2 (reference)" },
+    { id: "grok-imagine/image-to-image", label: "Grok Imagine (reference)" },
+    { id: "google/nano-banana-edit", label: "Nano Banana Edit (fast)" },
+  ],
+  video: [
+    { id: "bytedance/v1-pro-fast-image-to-video", label: "Seedance V1 Pro Fast" },
+    { id: "bytedance/v1-pro-image-to-video", label: "Seedance V1 Pro" },
+  ],
+};
+
+export const defaultModel: Record<KieMode, string> = {
+  image: "gpt-image-2-text-to-image",
+  "image-edit": "gpt-image-2-image-to-image",
+  video: "bytedance/v1-pro-fast-image-to-video",
+};
