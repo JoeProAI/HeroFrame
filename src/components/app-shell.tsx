@@ -1,40 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { frontEndDesignTemplate, heroFightLeagueTemplate } from "@/lib/workflow-templates";
 import { runKieGeneration } from "@/lib/kie/run-client";
 import { useCharacters } from "@/lib/use-characters";
+import { useStylePresets } from "@/lib/use-style-presets";
+import { buildFightShots, expandShots } from "@/lib/shots";
 
-type PipelineStatus = "idle" | "loading" | "success" | "error";
+type Status = "idle" | "loading" | "success" | "error";
 type Speed = "fast" | "balanced" | "quality";
-
-type RunSummary = {
-  _id: string;
-  status: "queued" | "running" | "succeeded" | "failed";
-  createdAt: number;
-  input: { title: string; storyBeat: string; styleHint?: string };
-};
+type Tab = "cast" | "scenes" | "fight" | "frames";
 
 type Frame = {
   id: string;
   url: string;
+  type: "image" | "video";
   prompt: string;
   characterName?: string;
+  shot?: string;
   createdAt: number;
-};
-
-type BootstrapPayload = {
-  projectId: string;
-  heroWorkflowId?: string;
-  workflowId?: string;
-  ownerId: string;
-};
-
-const statusColor: Record<RunSummary["status"], string> = {
-  queued: "bg-[#ffd23f] text-[#05040a]",
-  running: "bg-[#2ec4b6] text-[#05040a]",
-  succeeded: "bg-[#4ade80] text-[#05040a]",
-  failed: "bg-[#ff5a3c] text-[#fbf4e6]",
 };
 
 const panel = "rounded-2xl border border-[#2e2640] bg-[#181320]";
@@ -44,47 +27,81 @@ const field =
 const btn =
   "inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-bold transition hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffd23f] disabled:cursor-not-allowed disabled:opacity-40 disabled:translate-y-0";
 
-const navItems = [
+const tabs: { id: Tab; label: string; dot: string }[] = [
   { id: "cast", label: "Cast", dot: "#8a5cff" },
-  { id: "compose", label: "Compose", dot: "#ff5a3c" },
+  { id: "scenes", label: "Scenes", dot: "#ff5a3c" },
+  { id: "fight", label: "Fight League", dot: "#2ec4b6" },
   { id: "frames", label: "Frames", dot: "#ffd23f" },
-  { id: "workflows", label: "Workflows", dot: "#2ec4b6" },
 ];
 
 const speeds: Speed[] = ["fast", "balanced", "quality"];
 
+const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
 export const AppShell = () => {
   const { characters, activeCharacter, activeId, setActiveId, addCharacter, removeCharacter } = useCharacters();
+  const { presets, activePreset, activeId: presetId, setActiveId: setPresetId, addPreset } = useStylePresets();
 
-  const [runs, setRuns] = useState<RunSummary[]>([]);
-  const [bootstrap, setBootstrap] = useState<BootstrapPayload | null>(null);
+  const [tab, setTab] = useState<Tab>("cast");
+  const [status, setStatus] = useState<Status>("idle");
+  const [message, setMessage] = useState("");
+  const [frames, setFrames] = useState<Frame[]>([]);
+  const [speed, setSpeed] = useState<Speed>("balanced");
 
-  // Character creation
+  // Cast creation
   const [charName, setCharName] = useState("");
   const [charPrompt, setCharPrompt] = useState("");
   const [charUrl, setCharUrl] = useState("");
 
-  // Scene composition
+  // Scenes
   const [sceneTitle, setSceneTitle] = useState("");
   const [storyBeat, setStoryBeat] = useState("");
-  const [styleHint, setStyleHint] = useState("");
-  const [speed, setSpeed] = useState<Speed>("balanced");
+  const [shotCount, setShotCount] = useState(4);
+  const [variantCount, setVariantCount] = useState(4);
 
-  const [status, setStatus] = useState<PipelineStatus>("idle");
-  const [message, setMessage] = useState("");
-  const [frames, setFrames] = useState<Frame[]>([]);
+  // Style preset creation
+  const [presetName, setPresetName] = useState("");
+  const [presetText, setPresetText] = useState("");
 
-  const isReady = bootstrap !== null;
-  const canScene = sceneTitle.trim().length > 0 && storyBeat.trim().length > 0;
+  // Fight
+  const [fighterAId, setFighterAId] = useState<string>("");
+  const [fighterBId, setFighterBId] = useState<string>("");
+  const [arena, setArena] = useState("");
 
-  const addFrame = (url: string, prompt: string, characterName?: string) => {
-    setFrames((prev) => [
-      { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, url, prompt, characterName, createdAt: Date.now() },
-      ...prev,
-    ]);
+  const busy = status === "loading";
+  const styleHint = activePreset?.text;
+
+  const addFrame = (frame: Omit<Frame, "id" | "createdAt">) =>
+    setFrames((prev) => [{ ...frame, id: uid(), createdAt: Date.now() }, ...prev]);
+
+  // ---- Cast ---------------------------------------------------------------
+  const createCharacterFromPrompt = async () => {
+    if (!charName.trim() || !charPrompt.trim()) {
+      setStatus("error");
+      setMessage("Give the character a name and a reference description.");
+      return;
+    }
+    setStatus("loading");
+    setMessage(`Generating reference for ${charName.trim()}...`);
+    try {
+      const url = await runKieGeneration({
+        prompt: `Full-body character reference sheet, single character, neutral background: ${charPrompt.trim()}`,
+        styleHint,
+        speed,
+        mode: "image",
+        onProgress: (s) => setMessage(`Generating reference... (${s})`),
+      });
+      addCharacter(charName, url, charPrompt.trim());
+      setCharName("");
+      setCharPrompt("");
+      setStatus("success");
+      setMessage("Reference generated and character saved.");
+    } catch (error) {
+      setStatus("error");
+      setMessage(error instanceof Error ? error.message : "Reference generation failed.");
+    }
   };
 
-  // ---- Character creation -------------------------------------------------
   const createCharacterFromUrl = () => {
     if (!charName.trim() || !charUrl.trim()) {
       setStatus("error");
@@ -98,100 +115,118 @@ export const AppShell = () => {
     setMessage("Character saved from URL.");
   };
 
-  const createCharacterFromPrompt = async () => {
-    if (!charName.trim() || !charPrompt.trim()) {
+  // ---- Generation helpers -------------------------------------------------
+  const generateImage = async (prompt: string, refs?: string[]) =>
+    runKieGeneration({
+      prompt: refs?.length ? `Keep the same character(s) from the reference image(s). ${prompt}` : prompt,
+      styleHint,
+      speed,
+      mode: refs?.length ? "image-edit" : "image",
+      imageUrls: refs,
+      onProgress: (s) => setMessage(`Working... (${s})`),
+    });
+
+  // ---- Scenes: multi-shot -------------------------------------------------
+  const generateMultiShot = async () => {
+    if (!storyBeat.trim()) {
       setStatus("error");
-      setMessage("Give the character a name and a reference prompt.");
+      setMessage("Add a story beat first.");
       return;
     }
+    const shots = expandShots(storyBeat, shotCount);
+    const refs = activeCharacter ? [activeCharacter.referenceUrl] : undefined;
     setStatus("loading");
-    setMessage(`Generating reference for ${charName.trim()}...`);
     try {
-      const url = await runKieGeneration({
-        prompt: `Full-body character reference sheet, single character, neutral background: ${charPrompt.trim()}`,
-        styleHint: styleHint || undefined,
-        speed,
-        mode: "image",
-        onProgress: (state) => setMessage(`Generating reference... (${state})`),
-      });
-      addCharacter(charName, url, charPrompt.trim());
-      setCharName("");
-      setCharPrompt("");
+      for (let i = 0; i < shots.length; i += 1) {
+        setMessage(`Generating shot ${i + 1}/${shots.length}: ${shots[i].label}...`);
+        const url = await generateImage(shots[i].prompt, refs);
+        addFrame({ url, type: "image", prompt: shots[i].prompt, characterName: activeCharacter?.name, shot: shots[i].label });
+      }
       setStatus("success");
-      setMessage("Reference generated and character saved.");
+      setMessage(`Generated ${shots.length} shots${activeCharacter ? ` with ${activeCharacter.name}` : ""}.`);
+      setTab("frames");
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Reference generation failed.");
+      setMessage(error instanceof Error ? error.message : "Multi-shot generation failed.");
     }
   };
 
-  // ---- Scene generation (character-aware) ---------------------------------
-  const generateScene = async () => {
-    if (!canScene) {
+  // ---- Scenes: variations -------------------------------------------------
+  const generateVariations = async () => {
+    if (!storyBeat.trim()) {
       setStatus("error");
-      setMessage("Add a scene title and story beat first.");
+      setMessage("Add a story beat first.");
       return;
     }
+    const refs = activeCharacter ? [activeCharacter.referenceUrl] : undefined;
     const prompt = [sceneTitle.trim(), storyBeat.trim()].filter(Boolean).join(". ");
     setStatus("loading");
-    setMessage(
-      activeCharacter
-        ? `Generating scene with ${activeCharacter.name}...`
-        : "Generating scene (no character selected)...",
-    );
+    try {
+      for (let i = 0; i < variantCount; i += 1) {
+        setMessage(`Generating variant ${i + 1}/${variantCount}...`);
+        const url = await generateImage(prompt, refs);
+        addFrame({ url, type: "image", prompt, characterName: activeCharacter?.name, shot: `Variant ${i + 1}` });
+      }
+      setStatus("success");
+      setMessage(`Generated ${variantCount} variants.`);
+      setTab("frames");
+    } catch (error) {
+      setStatus("error");
+      setMessage(error instanceof Error ? error.message : "Variation generation failed.");
+    }
+  };
+
+  // ---- Fight League -------------------------------------------------------
+  const fighterA = characters.find((c) => c.id === fighterAId) ?? null;
+  const fighterB = characters.find((c) => c.id === fighterBId) ?? null;
+
+  const generateFight = async () => {
+    if (!fighterA || !fighterB) {
+      setStatus("error");
+      setMessage("Pick two fighters from your cast.");
+      return;
+    }
+    const shots = buildFightShots(fighterA.name, fighterB.name, arena);
+    const bothRefs = [fighterA.referenceUrl, fighterB.referenceUrl];
+    setStatus("loading");
+    try {
+      for (let i = 0; i < shots.length; i += 1) {
+        setMessage(`Fight shot ${i + 1}/${shots.length}: ${shots[i].label}...`);
+        // Intros use the single relevant fighter; the rest use both references.
+        const refs = i === 0 ? [fighterA.referenceUrl] : i === 1 ? [fighterB.referenceUrl] : bothRefs;
+        const url = await generateImage(shots[i].prompt, refs);
+        addFrame({ url, type: "image", prompt: shots[i].prompt, shot: shots[i].label });
+      }
+      setStatus("success");
+      setMessage(`Built a ${shots.length}-shot fight: ${fighterA.name} vs ${fighterB.name}.`);
+      setTab("frames");
+    } catch (error) {
+      setStatus("error");
+      setMessage(error instanceof Error ? error.message : "Fight generation failed.");
+    }
+  };
+
+  // ---- Animate (image -> video) ------------------------------------------
+  const animateFrame = async (frame: Frame) => {
+    setStatus("loading");
+    setMessage("Animating frame (image-to-video)...");
     try {
       const url = await runKieGeneration({
-        prompt: activeCharacter
-          ? `Keep the same character from the reference image. New scene: ${prompt}`
-          : prompt,
-        styleHint: styleHint || undefined,
-        speed,
-        mode: activeCharacter ? "image-edit" : "image",
-        imageUrls: activeCharacter ? [activeCharacter.referenceUrl] : undefined,
-        onProgress: (state) => setMessage(`Generating scene... (${state})`),
+        prompt: `Animate this scene with subtle, natural motion. ${frame.prompt}`,
+        speed: "fast",
+        mode: "video",
+        imageUrls: [frame.url],
+        resolution: "720p",
+        duration: "5",
+        onProgress: (s) => setMessage(`Animating... (${s})`),
       });
-      addFrame(url, prompt, activeCharacter?.name);
+      addFrame({ url, type: "video", prompt: frame.prompt, characterName: frame.characterName, shot: `${frame.shot ?? "clip"} (video)` });
       setStatus("success");
-      setMessage(activeCharacter ? `Scene generated with ${activeCharacter.name}.` : "Scene generated.");
+      setMessage("Clip ready.");
+      setTab("frames");
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Scene generation failed.");
-    }
-  };
-
-  // ---- Convex-backed workspace (optional) ---------------------------------
-  const bootstrapWorkspace = async () => {
-    setStatus("loading");
-    setMessage("Creating project and workflows in Convex...");
-    try {
-      const response = await fetch("/api/bootstrap", { method: "POST" });
-      const payload = (await response.json().catch(() => null)) as BootstrapPayload | { error?: string } | null;
-      if (!response.ok || !payload || "error" in payload) {
-        throw new Error((payload as { error?: string })?.error ?? `Bootstrap failed (HTTP ${response.status}).`);
-      }
-      setBootstrap(payload as BootstrapPayload);
-      setStatus("success");
-      setMessage("Workspace ready.");
-      await loadRuns((payload as BootstrapPayload).projectId);
-    } catch (error) {
-      setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Bootstrap failed.");
-    }
-  };
-
-  const loadRuns = async (projectIdArg?: string) => {
-    const projectId = projectIdArg ?? bootstrap?.projectId;
-    if (!projectId) return;
-    try {
-      const response = await fetch(`/api/runs?projectId=${encodeURIComponent(projectId)}`);
-      const payload = (await response.json().catch(() => null)) as { runs?: RunSummary[]; error?: string } | null;
-      if (!response.ok || !payload || payload.error) {
-        throw new Error(payload?.error ?? `Failed to load runs (HTTP ${response.status}).`);
-      }
-      setRuns(payload.runs ?? []);
-    } catch (error) {
-      setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Failed to load runs.");
+      setMessage(error instanceof Error ? error.message : "Animation failed.");
     }
   };
 
@@ -201,12 +236,11 @@ export const AppShell = () => {
       : status === "success"
         ? "border-[#4ade80] bg-[#4ade80]/12 text-[#86efac]"
         : "border-[#2e2640] bg-[#0c0a12] text-[#b3a7c4]";
-
-  const statusDot =
-    status === "error" ? "#ff5a3c" : status === "success" ? "#4ade80" : status === "loading" ? "#ffd23f" : "#6b6480";
+  const statusDot = status === "error" ? "#ff5a3c" : status === "success" ? "#4ade80" : status === "loading" ? "#ffd23f" : "#6b6480";
 
   return (
     <div className="flex min-h-screen w-full">
+      {/* SIDEBAR / TABS */}
       <aside className="sticky top-0 hidden h-screen w-60 flex-none flex-col border-r border-[#2e2640] bg-[#0c0a12]/80 p-5 lg:flex">
         <div className="flex items-center gap-2">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#ff5a3c] font-[family-name:var(--font-bricolage)] text-lg font-black text-[#05040a]">H</span>
@@ -216,11 +250,11 @@ export const AppShell = () => {
           </div>
         </div>
         <nav className="mt-8 flex flex-col gap-1">
-          {navItems.map((item) => (
-            <a key={item.id} href={`#${item.id}`} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-[#b3a7c4] transition hover:bg-[#181320] hover:text-[#fbf4e6]">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: item.dot }} />
-              {item.label}
-            </a>
+          {tabs.map((t) => (
+            <button key={t.id} type="button" onClick={() => setTab(t.id)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${tab === t.id ? "bg-[#181320] text-[#fbf4e6]" : "text-[#b3a7c4] hover:bg-[#181320] hover:text-[#fbf4e6]"}`}>
+              <span className="h-2.5 w-2.5 rounded-full" style={{ background: t.dot }} />
+              {t.label}
+            </button>
           ))}
         </nav>
         <div className="mt-auto rounded-xl border border-[#2e2640] bg-[#181320] p-3">
@@ -228,231 +262,193 @@ export const AppShell = () => {
             <span className="h-2.5 w-2.5 rounded-full" style={{ background: statusDot }} />
             <p className="text-xs font-semibold text-[#fbf4e6]">{status}</p>
           </div>
-          <p className="mt-1 text-[11px] leading-4 text-[#6b6480]">
-            {characters.length} cast · {frames.length} frame{frames.length === 1 ? "" : "s"}
-          </p>
+          <p className="mt-1 text-[11px] leading-4 text-[#6b6480]">{characters.length} cast · {frames.length} frames</p>
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-[#2e2640] bg-[#0c0a12]/85 px-5 py-3 backdrop-blur sm:px-8">
+        <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-[#2e2640] bg-[#0c0a12]/85 px-5 py-3 backdrop-blur sm:px-8">
           <div className="flex items-center gap-3">
             <span className="rounded-full bg-[#ffd23f] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#05040a]">Ages of Cartoons</span>
-            <h1 className="font-[family-name:var(--font-bricolage)] text-lg font-black uppercase tracking-tight sm:text-xl">Character Studio</h1>
+            <h1 className="font-[family-name:var(--font-bricolage)] text-lg font-black uppercase tracking-tight sm:text-xl">Cartoon Studio</h1>
           </div>
           <div className="flex items-center gap-2">
-            <span className="hidden text-xs text-[#6b6480] sm:inline">Active hero:</span>
-            <span className="rounded-full border border-[#2e2640] px-3 py-1 text-xs font-bold text-[#fbf4e6]">
-              {activeCharacter ? activeCharacter.name : "none"}
-            </span>
+            {/* Style preset selector */}
+            <select
+              value={presetId ?? ""}
+              onChange={(e) => setPresetId(e.target.value || null)}
+              className="min-h-9 rounded-lg border border-[#2e2640] bg-[#0c0a12] px-2 text-xs text-[#fbf4e6]"
+            >
+              <option value="">No style</option>
+              {presets.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <div className="flex gap-1">
+              {speeds.map((s) => (
+                <button key={s} type="button" onClick={() => setSpeed(s)} className={`rounded-lg border px-2 py-1 text-[11px] font-bold capitalize ${speed === s ? "border-[#2ec4b6] bg-[#2ec4b6] text-[#05040a]" : "border-[#2e2640] text-[#b3a7c4]"}`}>{s}</button>
+              ))}
+            </div>
           </div>
         </header>
 
-        <div className="grid flex-1 grid-cols-1 gap-5 p-5 sm:p-8 xl:grid-cols-12">
-          {/* CAST — character library + creation */}
-          <section id="cast" className={`${panel} border-t-4 border-t-[#8a5cff] p-6 xl:col-span-4`}>
-            <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Cast</h2>
-            <p className="mt-1 text-xs text-[#6b6480]">Save a hero once. Reuse the same look across every scene.</p>
+        {/* Tab strip for mobile */}
+        <div className="flex gap-2 overflow-x-auto border-b border-[#2e2640] px-5 py-2 lg:hidden">
+          {tabs.map((t) => (
+            <button key={t.id} type="button" onClick={() => setTab(t.id)} className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-bold ${tab === t.id ? "bg-[#ffd23f] text-[#05040a]" : "border border-[#2e2640] text-[#b3a7c4]"}`}>{t.label}</button>
+          ))}
+        </div>
 
-            <div className="mt-4 grid gap-3 rounded-xl border border-[#2e2640] bg-[#0c0a12] p-4">
-              <div className="grid gap-2">
-                <label className={labelCls} htmlFor="char-name">Character name</label>
-                <input id="char-name" value={charName} onChange={(e) => setCharName(e.target.value)} placeholder="e.g. Captain Rook" className={field} />
-              </div>
-              <div className="grid gap-2">
-                <label className={labelCls} htmlFor="char-prompt">Describe the hero (to generate a reference)</label>
-                <textarea id="char-prompt" value={charPrompt} onChange={(e) => setCharPrompt(e.target.value)} placeholder="e.g. stocky knight, copper armor, scar over left eye, teal cape" className={`${field} min-h-20 py-2`} />
-              </div>
-              <button type="button" onClick={createCharacterFromPrompt} disabled={status === "loading"} className={`${btn} bg-[#8a5cff] text-[#fbf4e6] hover:bg-[#9d75ff]`}>
-                Generate reference + save
-              </button>
-              <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[#6b6480]">
-                <span className="h-px flex-1 bg-[#2e2640]" /> or paste a URL <span className="h-px flex-1 bg-[#2e2640]" />
-              </div>
-              <input value={charUrl} onChange={(e) => setCharUrl(e.target.value)} placeholder="https://image-url..." className={field} />
-              <button type="button" onClick={createCharacterFromUrl} disabled={status === "loading"} className={`${btn} border border-[#2e2640] bg-transparent text-[#fbf4e6] hover:bg-[#181320]`}>
-                Save from URL
-              </button>
+        <div className="flex-1 p-5 sm:p-8">
+          {message ? <div className={`mb-5 rounded-xl border px-3 py-2 text-sm font-medium ${feedbackColor}`} role="status">{message}</div> : null}
+
+          {/* CAST */}
+          {tab === "cast" ? (
+            <div className="grid gap-5 xl:grid-cols-12">
+              <section className={`${panel} border-t-4 border-t-[#8a5cff] p-6 xl:col-span-5`}>
+                <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Create a hero</h2>
+                <p className="mt-1 text-xs text-[#6b6480]">Save a hero once. Reuse the same look across every scene and fight.</p>
+                <div className="mt-4 grid gap-3">
+                  <div className="grid gap-2"><label className={labelCls} htmlFor="cn">Name</label><input id="cn" value={charName} onChange={(e) => setCharName(e.target.value)} placeholder="e.g. Captain Rook" className={field} /></div>
+                  <div className="grid gap-2"><label className={labelCls} htmlFor="cp">Describe the hero</label><textarea id="cp" value={charPrompt} onChange={(e) => setCharPrompt(e.target.value)} placeholder="stocky knight, copper armor, scar over left eye, teal cape" className={`${field} min-h-24 py-2`} /></div>
+                  <button type="button" onClick={createCharacterFromPrompt} disabled={busy} className={`${btn} bg-[#8a5cff] text-[#fbf4e6] hover:bg-[#9d75ff]`}>Generate reference + save</button>
+                  <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[#6b6480]"><span className="h-px flex-1 bg-[#2e2640]" /> or paste URL <span className="h-px flex-1 bg-[#2e2640]" /></div>
+                  <input value={charUrl} onChange={(e) => setCharUrl(e.target.value)} placeholder="https://image-url..." className={field} />
+                  <button type="button" onClick={createCharacterFromUrl} disabled={busy} className={`${btn} border border-[#2e2640] bg-transparent text-[#fbf4e6] hover:bg-[#181320]`}>Save from URL</button>
+                </div>
+              </section>
+
+              <section className={`${panel} border-t-4 border-t-[#2ec4b6] p-6 xl:col-span-7`}>
+                <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Cast ({characters.length})</h2>
+                {characters.length === 0 ? (
+                  <p className="mt-4 text-sm text-[#6b6480]">No heroes yet. Create one on the left.</p>
+                ) : (
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {characters.map((c) => (
+                      <div key={c.id} className={`flex gap-3 rounded-xl border p-3 ${c.id === activeId ? "border-[#8a5cff] bg-[#8a5cff]/10" : "border-[#2e2640] bg-[#0c0a12]"}`}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={c.referenceUrl} alt={c.name} className="h-16 w-16 flex-none rounded-lg border border-[#2e2640] object-cover" />
+                        <div className="flex min-w-0 flex-1 flex-col">
+                          <span className="truncate text-sm font-bold text-[#fbf4e6]">{c.name}</span>
+                          <div className="mt-auto flex gap-2">
+                            <button type="button" onClick={() => setActiveId(c.id)} className={`rounded-lg px-2 py-1 text-[11px] font-bold ${c.id === activeId ? "bg-[#8a5cff] text-[#fbf4e6]" : "border border-[#2e2640] text-[#b3a7c4] hover:text-[#fbf4e6]"}`}>{c.id === activeId ? "active" : "use"}</button>
+                            <button type="button" onClick={() => removeCharacter(c.id)} className="rounded-lg px-2 py-1 text-[11px] text-[#6b6480] hover:text-[#ff5a3c]">remove</button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
             </div>
+          ) : null}
 
-            <div className="mt-4 grid gap-2">
-              {characters.length === 0 ? (
-                <p className="text-sm text-[#6b6480]">No characters yet. Create your first hero above.</p>
-              ) : (
-                characters.map((character) => (
-                  <button
-                    key={character.id}
-                    type="button"
-                    onClick={() => setActiveId(character.id)}
-                    className={`flex items-center gap-3 rounded-xl border p-2 text-left transition ${
-                      character.id === activeId ? "border-[#8a5cff] bg-[#8a5cff]/10" : "border-[#2e2640] bg-[#0c0a12] hover:border-[#8a5cff]"
-                    }`}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={character.referenceUrl} alt={character.name} className="h-12 w-12 flex-none rounded-lg border border-[#2e2640] object-cover" />
-                    <span className="flex-1 text-sm font-bold text-[#fbf4e6]">{character.name}</span>
-                    {character.id === activeId ? <span className="rounded-full bg-[#8a5cff] px-2 py-0.5 text-[10px] font-black uppercase text-[#fbf4e6]">active</span> : null}
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => { e.stopPropagation(); removeCharacter(character.id); }}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); removeCharacter(character.id); } }}
-                      className="rounded-lg px-2 py-1 text-xs text-[#6b6480] transition hover:text-[#ff5a3c]"
-                    >
-                      remove
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-          </section>
+          {/* SCENES */}
+          {tab === "scenes" ? (
+            <div className="grid gap-5 xl:grid-cols-12">
+              <section className={`${panel} border-t-4 border-t-[#ff5a3c] p-6 xl:col-span-7`}>
+                <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Multi-shot scene</h2>
+                <p className="mt-1 text-xs text-[#6b6480]">One beat becomes a coordinated shot sequence{activeCharacter ? `, locked to ${activeCharacter.name}` : ""}.</p>
+                <div className="mt-4 grid gap-3">
+                  <div className="grid gap-2"><label className={labelCls} htmlFor="st">Scene title</label><input id="st" value={sceneTitle} onChange={(e) => setSceneTitle(e.target.value)} placeholder="e.g. Rooftop standoff" className={field} /></div>
+                  <div className="grid gap-2"><label className={labelCls} htmlFor="sb">Story beat</label><textarea id="sb" value={storyBeat} onChange={(e) => setStoryBeat(e.target.value)} placeholder="What happens in this scene?" className={`${field} min-h-24 py-2`} /></div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-2"><label className={labelCls} htmlFor="shots"># shots</label>
+                      <select id="shots" value={shotCount} onChange={(e) => setShotCount(Number(e.target.value))} className={field}>{[2,3,4,5,6].map((n) => <option key={n} value={n}>{n}</option>)}</select>
+                    </div>
+                    <div className="grid gap-2"><label className={labelCls} htmlFor="vars"># variants</label>
+                      <select id="vars" value={variantCount} onChange={(e) => setVariantCount(Number(e.target.value))} className={field}>{[2,3,4].map((n) => <option key={n} value={n}>{n}</option>)}</select>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button type="button" onClick={generateMultiShot} disabled={busy} className={`${btn} bg-[#ff5a3c] text-[#fbf4e6] hover:bg-[#ff7259]`}>Generate {shotCount} shots</button>
+                  <button type="button" onClick={generateVariations} disabled={busy} className={`${btn} border border-[#2e2640] bg-transparent text-[#fbf4e6] hover:bg-[#181320]`}>{variantCount} variations</button>
+                </div>
+              </section>
 
-          {/* COMPOSE — scene generation */}
-          <section id="compose" className={`${panel} border-t-4 border-t-[#ff5a3c] p-6 xl:col-span-4`}>
-            <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Compose scene</h2>
-            <div className="mt-4 grid gap-3">
-              <div className="grid gap-2">
-                <label className={labelCls} htmlFor="scene-title">Scene title</label>
-                <input id="scene-title" value={sceneTitle} onChange={(e) => setSceneTitle(e.target.value)} placeholder="e.g. Rooftop standoff" className={field} />
-              </div>
-              <div className="grid gap-2">
-                <label className={labelCls} htmlFor="story-beat">Story beat</label>
-                <textarea id="story-beat" value={storyBeat} onChange={(e) => setStoryBeat(e.target.value)} placeholder="What happens in this scene?" className={`${field} min-h-24 py-2`} />
-              </div>
-              <div className="grid gap-2">
-                <label className={labelCls} htmlFor="style-hint">Style hint (optional)</label>
-                <input id="style-hint" value={styleHint} onChange={(e) => setStyleHint(e.target.value)} placeholder="e.g. bold outlines, saturated color" className={field} />
-              </div>
-              <div className="grid gap-2">
-                <span className={labelCls}>Quality / speed</span>
-                <div className="flex gap-2">
-                  {speeds.map((s) => (
-                    <button key={s} type="button" onClick={() => setSpeed(s)} className={`flex-1 rounded-xl border px-3 py-2 text-xs font-bold capitalize transition ${speed === s ? "border-[#2ec4b6] bg-[#2ec4b6] text-[#05040a]" : "border-[#2e2640] bg-[#0c0a12] text-[#b3a7c4] hover:text-[#fbf4e6]"}`}>
-                      {s}
-                    </button>
+              <section className={`${panel} border-t-4 border-t-[#ffd23f] p-6 xl:col-span-5`}>
+                <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Style presets</h2>
+                <p className="mt-1 text-xs text-[#6b6480]">Active: <span className="font-bold text-[#ffd23f]">{activePreset?.name ?? "none"}</span></p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {presets.map((p) => (
+                    <button key={p.id} type="button" onClick={() => setPresetId(p.id === presetId ? null : p.id)} className={`rounded-full px-3 py-1.5 text-xs font-bold ${p.id === presetId ? "bg-[#ffd23f] text-[#05040a]" : "border border-[#2e2640] text-[#b3a7c4] hover:text-[#fbf4e6]"}`}>{p.name}</button>
                   ))}
                 </div>
-              </div>
+                <div className="mt-4 grid gap-2">
+                  <input value={presetName} onChange={(e) => setPresetName(e.target.value)} placeholder="Preset name" className={field} />
+                  <input value={presetText} onChange={(e) => setPresetText(e.target.value)} placeholder="style words, e.g. watercolor, soft light" className={field} />
+                  <button type="button" onClick={() => { addPreset(presetName, presetText); setPresetName(""); setPresetText(""); }} className={`${btn} border border-[#2e2640] bg-transparent text-[#fbf4e6] hover:bg-[#181320]`}>Add preset</button>
+                </div>
+              </section>
             </div>
+          ) : null}
 
-            <div className="mt-4 rounded-xl border border-[#2e2640] bg-[#0c0a12] p-3 text-xs text-[#b3a7c4]">
-              {activeCharacter ? (
-                <>Scene will keep <span className="font-bold text-[#8a5cff]">{activeCharacter.name}</span> consistent via the saved reference.</>
-              ) : (
-                <>No active character — this generates a fresh image. Select a hero in Cast for consistency.</>
-              )}
+          {/* FIGHT */}
+          {tab === "fight" ? (
+            <div className="grid gap-5 xl:grid-cols-12">
+              <section className={`${panel} border-t-4 border-t-[#2ec4b6] p-6 xl:col-span-12`}>
+                <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Hero Fight League builder</h2>
+                <p className="mt-1 text-xs text-[#6b6480]">Pick two saved heroes. Heroframe builds intros + a 6-shot fight, keeping both consistent.</p>
+                {characters.length < 2 ? (
+                  <p className="mt-4 text-sm text-[#6b6480]">Create at least two heroes in Cast first.</p>
+                ) : (
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <div className="grid gap-2"><label className={labelCls} htmlFor="fa">Fighter A</label>
+                      <select id="fa" value={fighterAId} onChange={(e) => setFighterAId(e.target.value)} className={field}><option value="">Select...</option>{characters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                    </div>
+                    <div className="grid gap-2"><label className={labelCls} htmlFor="fb">Fighter B</label>
+                      <select id="fb" value={fighterBId} onChange={(e) => setFighterBId(e.target.value)} className={field}><option value="">Select...</option>{characters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                    </div>
+                    <div className="grid gap-2"><label className={labelCls} htmlFor="ar">Arena</label><input id="ar" value={arena} onChange={(e) => setArena(e.target.value)} placeholder="e.g. neon rooftop colosseum" className={field} /></div>
+                  </div>
+                )}
+                <div className="mt-4">
+                  <button type="button" onClick={generateFight} disabled={busy || !fighterA || !fighterB} className={`${btn} bg-[#2ec4b6] text-[#05040a] hover:bg-[#43d6c8]`}>Build the fight</button>
+                </div>
+              </section>
             </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button type="button" onClick={generateScene} disabled={!canScene || status === "loading"} className={`${btn} bg-[#ff5a3c] text-[#fbf4e6] hover:bg-[#ff7259]`}>
-                Generate scene
-              </button>
-            </div>
-
-            {message ? <div className={`mt-4 rounded-xl border px-3 py-2 text-sm font-medium ${feedbackColor}`} role="status">{message}</div> : null}
-          </section>
-
-          {/* ACTIVE REFERENCE preview */}
-          <aside className={`${panel} overflow-hidden border-t-4 border-t-[#2ec4b6] xl:col-span-4`}>
-            <div className="flex items-center justify-between p-6 pb-3">
-              <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Reference</h2>
-              <span className="rounded-full bg-[#2ec4b6] px-2 py-0.5 text-[10px] font-black uppercase text-[#05040a]">model sheet</span>
-            </div>
-            <div className="relative flex min-h-64 items-center justify-center border-t border-[#2e2640] bg-[#0c0a12]">
-              {activeCharacter ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={activeCharacter.referenceUrl} alt={activeCharacter.name} className="h-full w-full object-contain" />
-              ) : (
-                <p className="px-6 text-center text-xs text-[#6b6480]">Select or create a character to lock a reference.</p>
-              )}
-            </div>
-          </aside>
+          ) : null}
 
           {/* FRAMES */}
-          <section id="frames" className={`${panel} border-t-4 border-t-[#ffd23f] p-6 xl:col-span-8`}>
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Frames</h2>
-              {frames.length > 0 ? (
-                <button type="button" onClick={() => setFrames([])} className="rounded-full border border-[#2e2640] px-3 py-1 text-[11px] font-bold uppercase text-[#b3a7c4] transition hover:text-[#fbf4e6]">Clear</button>
-              ) : null}
-            </div>
-            {frames.length === 0 ? (
-              <div className="mt-4 flex min-h-64 items-center justify-center rounded-xl border border-dashed border-[#2e2640] bg-[#0c0a12] text-center">
-                <p className="px-6 text-sm text-[#6b6480]">Generated scenes land here, tagged with the character used.</p>
+          {tab === "frames" ? (
+            <section className={`${panel} border-t-4 border-t-[#ffd23f] p-6`}>
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Frames & clips ({frames.length})</h2>
+                {frames.length > 0 ? <button type="button" onClick={() => setFrames([])} className="rounded-full border border-[#2e2640] px-3 py-1 text-[11px] font-bold uppercase text-[#b3a7c4] hover:text-[#fbf4e6]">Clear</button> : null}
               </div>
-            ) : (
-              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
-                {frames.map((frame) => (
-                  <figure key={frame.id} className="overflow-hidden rounded-xl border border-[#2e2640] bg-[#0c0a12]">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={frame.url} alt={frame.prompt} className="aspect-square w-full object-cover" />
-                    <figcaption className="flex items-center justify-between gap-2 p-3">
-                      {frame.characterName ? (
-                        <span className="rounded-full bg-[#8a5cff] px-2 py-0.5 text-[10px] font-black uppercase text-[#fbf4e6]">{frame.characterName}</span>
-                      ) : (
-                        <span className="rounded-full bg-[#2e2640] px-2 py-0.5 text-[10px] font-black uppercase text-[#b3a7c4]">no char</span>
-                      )}
-                      <div className="flex gap-2">
-                        <a href={frame.url} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-[#2ec4b6] hover:underline">Open</a>
-                        <a href={frame.url} download className="text-xs font-bold text-[#ffd23f] hover:underline">Download</a>
-                      </div>
-                    </figcaption>
-                  </figure>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* WORKSPACE (Convex-backed, optional) */}
-          <aside className={`${panel} border-t-4 border-t-[#2ec4b6] p-6 xl:col-span-4`}>
-            <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Workspace</h2>
-            <p className="mt-1 text-xs text-[#6b6480]">Optional Convex-backed run log.</p>
-            <div className="mt-3 flex gap-2">
-              <button type="button" onClick={bootstrapWorkspace} disabled={status === "loading"} className={`${btn} bg-[#ffd23f] text-[#05040a] hover:bg-[#ffdd66]`}>{isReady ? "Re-bootstrap" : "Bootstrap"}</button>
-              <button type="button" onClick={() => loadRuns()} disabled={!isReady || status === "loading"} className={`${btn} border border-[#2e2640] bg-transparent text-[#fbf4e6] hover:bg-[#181320]`}>Refresh</button>
-            </div>
-            <div className="mt-4 space-y-2">
-              {!isReady ? (
-                <p className="text-sm text-[#6b6480]">Not connected.</p>
-              ) : runs.length === 0 ? (
-                <p className="text-sm text-[#6b6480]">No runs yet.</p>
-              ) : (
-                runs.map((run) => (
-                  <article key={run._id} className="rounded-xl border border-[#2e2640] bg-[#0c0a12] p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="text-sm font-bold text-[#fbf4e6]">{run.input.title}</h3>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${statusColor[run.status]}`}>{run.status}</span>
-                    </div>
-                    <p className="mt-2 text-[11px] text-[#6b6480]">{new Date(run.createdAt).toLocaleString()}</p>
-                  </article>
-                ))
-              )}
-            </div>
-          </aside>
-
-          {/* WORKFLOWS */}
-          <section id="workflows" className="grid gap-5 xl:col-span-12 xl:grid-cols-2">
-            {[
-              { title: "Hero workflow", accent: "#8a5cff", chip: "Production", steps: heroFightLeagueTemplate.steps },
-              { title: "Front-end design workflow", accent: "#ffd23f", chip: "Design", steps: frontEndDesignTemplate.steps },
-            ].map((workflow) => (
-              <div key={workflow.title} className={`${panel} p-6`} style={{ borderTop: `4px solid ${workflow.accent}` }}>
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="font-[family-name:var(--font-bricolage)] text-lg font-extrabold">{workflow.title}</h2>
-                  <span className="rounded-full px-2.5 py-1 text-[10px] font-black uppercase text-[#05040a]" style={{ background: workflow.accent }}>{workflow.chip}</span>
+              {frames.length === 0 ? (
+                <div className="mt-4 flex min-h-64 items-center justify-center rounded-xl border border-dashed border-[#2e2640] bg-[#0c0a12] text-center">
+                  <p className="px-6 text-sm text-[#6b6480]">Generate a scene or a fight, then animate any frame here.</p>
                 </div>
-                <ol className="mt-4 grid gap-1.5">
-                  {workflow.steps.map((step, index) => (
-                    <li key={step.id} className="flex items-center gap-3 rounded-lg border border-[#2e2640] bg-[#0c0a12] px-3 py-2">
-                      <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full text-[11px] font-black text-[#05040a]" style={{ background: workflow.accent }}>{index + 1}</span>
-                      <span className="flex-1 text-sm text-[#fbf4e6]">{step.label}</span>
-                      {!step.required ? <span className="text-[10px] uppercase text-[#6b6480]">opt</span> : null}
-                    </li>
+              ) : (
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+                  {frames.map((frame) => (
+                    <figure key={frame.id} className="overflow-hidden rounded-xl border border-[#2e2640] bg-[#0c0a12]">
+                      {frame.type === "video" ? (
+                        <video src={frame.url} controls className="aspect-square w-full bg-black object-contain" />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={frame.url} alt={frame.prompt} className="aspect-square w-full object-cover" />
+                      )}
+                      <figcaption className="flex items-center justify-between gap-2 p-3">
+                        <div className="flex min-w-0 flex-col">
+                          {frame.shot ? <span className="truncate text-[11px] font-bold text-[#fbf4e6]">{frame.shot}</span> : null}
+                          {frame.characterName ? <span className="truncate text-[10px] uppercase text-[#8a5cff]">{frame.characterName}</span> : null}
+                        </div>
+                        <div className="flex flex-none gap-2">
+                          {frame.type === "image" ? (
+                            <button type="button" onClick={() => animateFrame(frame)} disabled={busy} className="rounded-lg bg-[#ff5a3c] px-2 py-1 text-[11px] font-bold text-[#fbf4e6] disabled:opacity-40">Animate</button>
+                          ) : null}
+                          <a href={frame.url} target="_blank" rel="noopener noreferrer" className="text-[11px] font-bold text-[#2ec4b6] hover:underline">Open</a>
+                        </div>
+                      </figcaption>
+                    </figure>
                   ))}
-                </ol>
-              </div>
-            ))}
-          </section>
+                </div>
+              )}
+            </section>
+          ) : null}
         </div>
       </div>
     </div>

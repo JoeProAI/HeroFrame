@@ -17,10 +17,11 @@ const imageEditModels: Record<KieSpeed, string> = {
   quality: "gpt-image-2-image-to-image",
 };
 
+// Image-to-video. v1-pro takes input.image_url + prompt + resolution + duration.
 const videoModels: Record<KieSpeed, string> = {
-  fast: "bytedance/seedance-2-0-fast",
-  balanced: "bytedance/seedance-2-0",
-  quality: "veo3.1",
+  fast: "bytedance/v1-pro-fast-image-to-video",
+  balanced: "bytedance/v1-pro-image-to-video",
+  quality: "bytedance/v1-pro-image-to-video",
 };
 
 export const resolveKieModel = (mode: KieMode, speed: KieSpeed = "balanced"): string => {

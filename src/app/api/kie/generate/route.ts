@@ -15,6 +15,8 @@ type GenerateBody = {
   styleHint?: string;
   imageUrls?: string[];
   imageSize?: string;
+  resolution?: string;
+  duration?: string;
 };
 
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
@@ -38,9 +40,16 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
   const prompt = body.styleHint?.trim() ? `${body.prompt.trim()}. Style: ${body.styleHint.trim()}` : body.prompt.trim();
 
   const input: Record<string, unknown> = { prompt };
-  if (body.imageSize) input.image_size = body.imageSize;
-  // gpt-image-2-image-to-image expects `input_urls`; pass reference images there.
-  if (body.imageUrls?.length) input.input_urls = body.imageUrls;
+  if (mode === "video") {
+    // image-to-video (bytedance/v1-pro-image-to-video): single image_url + clip params.
+    if (body.imageUrls?.length) input.image_url = body.imageUrls[0];
+    input.resolution = body.resolution ?? "720p";
+    input.duration = body.duration ?? "5";
+  } else {
+    if (body.imageSize) input.image_size = body.imageSize;
+    // gpt-image-2-image-to-image expects `input_urls`; pass reference images there.
+    if (body.imageUrls?.length) input.input_urls = body.imageUrls;
+  }
 
   let callBackUrl: string | undefined;
   try {

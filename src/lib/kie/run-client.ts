@@ -5,8 +5,10 @@ export type RunKieParams = {
   prompt: string;
   styleHint?: string;
   speed?: "fast" | "balanced" | "quality";
-  mode?: "image" | "image-edit";
+  mode?: "image" | "image-edit" | "video";
   imageUrls?: string[];
+  resolution?: string;
+  duration?: string;
   onProgress?: (state: string) => void;
 };
 
@@ -38,6 +40,8 @@ export const runKieGeneration = async (params: RunKieParams): Promise<string> =>
       prompt: params.prompt,
       styleHint: params.styleHint || undefined,
       imageUrls: params.imageUrls,
+      resolution: params.resolution,
+      duration: params.duration,
     }),
   });
   const payload = (await response.json().catch(() => null)) as GenerateResponse | null;
