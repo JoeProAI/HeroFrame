@@ -50,6 +50,17 @@ copy .env.example .env.local
 - `GHOST_API_URL` (e.g. `https://joepro-press.ghost.io`)
 - `GHOST_ADMIN_API_KEY` (server-only, `id:secret` format)
 - `GHOST_CONTENT_API_KEY` (optional, read-only)
+- `KIE_API_KEY` (server-only; image/video generation via kie.ai)
+- `KIE_API_BASE_URL` (optional, defaults to `https://api.kie.ai`)
+- `KIE_CALLBACK_BASE_URL` (optional; enables Kie completion webhooks)
+
+## Kie.ai image/video generation
+
+- `POST /api/kie/generate`: creates a unified Kie task (`/api/v1/jobs/createTask`), waits briefly, returns a result URL or a `taskId`.
+- `GET /api/kie/task?taskId=`: polls task state (`/api/v1/jobs/recordInfo`).
+- `POST /api/kie/callback`: receives Kie completion webhooks.
+- Model routing lives in `src/lib/kie/models.ts` (swap models by id, no rebuild). Default image model: `gpt-image-2-text-to-image`.
+- The Generate button in the UI uses Kie; it server-waits ~7s then client-polls the Art panel until the frame is ready.
 
 4. Run Convex dev backend:
 

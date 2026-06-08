@@ -127,6 +127,36 @@ export const AppShell = () => {
     }
   };
 
+  const pollKieTask = async (taskId: string) => {
+    const deadline = Date.now() + 120_000;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 3_000));
+      try {
+        const response = await fetch(`/api/kie/task?taskId=${encodeURIComponent(taskId)}`);
+        const payload = (await response.json().catch(() => null)) as
+          | { ok?: boolean; state?: string; resultUrl?: string; failMsg?: string }
+          | null;
+        if (!response.ok || !payload?.ok) continue;
+        if (payload.state === "success") {
+          setResultUrl(payload.resultUrl ?? "");
+          setStatus("success");
+          setMessage(payload.resultUrl ? "Frame ready." : "Task finished without a result URL.");
+          return;
+        }
+        if (payload.state === "fail") {
+          setStatus("error");
+          setMessage(payload.failMsg ?? "Generation failed.");
+          return;
+        }
+        setMessage(`Generating frame... (${payload.state ?? "working"})`);
+      } catch {
+        // transient; keep polling until the deadline
+      }
+    }
+    setStatus("error");
+    setMessage("Timed out waiting for the frame. Try Refresh later.");
+  };
+
   const generateFrame = async () => {
     if (!sceneTitle.trim() || !storyBeat.trim()) {
       setStatus("error");
@@ -134,35 +164,41 @@ export const AppShell = () => {
       return;
     }
     setStatus("loading");
-    setMessage("Sending request to WaveSpeed...");
+    setMessage("Sending request to Kie...");
     setResultUrl("");
     try {
-      const response = await fetch("/api/wavespeed/orchestrate", {
+      const response = await fetch("/api/kie/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode: "image",
-          runId: bootstrap?.projectId ?? "adhoc",
+          speed: "balanced",
           prompt: `${sceneTitle}. ${storyBeat}`,
           styleHint: styleHint || undefined,
-          strategy: { speed: "balanced", async: true },
         }),
       });
       const payload = (await response.json().catch(() => null)) as
-        | { ok?: boolean; error?: unknown; data?: { output?: string; data?: { outputs?: Array<{ url?: string }> } } }
+        | { ok?: boolean; error?: string; taskId?: string; state?: string; pending?: boolean; resultUrl?: string; failMsg?: string }
         | null;
       if (!response.ok || !payload?.ok) {
-        throw new Error(
-          typeof payload?.error === "string" ? payload.error : `WaveSpeed request failed (HTTP ${response.status}).`,
-        );
+        throw new Error(payload?.error ?? `Kie request failed (HTTP ${response.status}).`);
       }
-      const url = payload.data?.output ?? payload.data?.data?.outputs?.at(0)?.url ?? "";
-      setResultUrl(url);
-      setStatus("success");
-      setMessage(url ? "Generation returned a preview." : "Request accepted. Result will arrive via webhook.");
+      if (payload.state === "fail") {
+        throw new Error(payload.failMsg ?? "Generation failed.");
+      }
+      if (payload.resultUrl) {
+        setResultUrl(payload.resultUrl);
+        setStatus("success");
+        setMessage("Frame ready.");
+        return;
+      }
+      if (payload.taskId) {
+        setMessage("Generating frame...");
+        await pollKieTask(payload.taskId);
+      }
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "WaveSpeed request failed.");
+      setMessage(error instanceof Error ? error.message : "Kie request failed.");
     }
   };
 
