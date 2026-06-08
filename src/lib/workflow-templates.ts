@@ -14,4 +14,18 @@ export const heroFightLeagueTemplate: WorkflowTemplate = {
   ],
 };
 
-export const workflowTemplates: WorkflowTemplate[] = [heroFightLeagueTemplate];
+export const frontEndDesignTemplate: WorkflowTemplate = {
+  name: "Heroframe UI System v1",
+  key: "heroframe-ui-system",
+  version: 1,
+  steps: [
+    { id: "intent", label: "Art Direction Intent", kind: "design", required: true },
+    { id: "tokens", label: "Token System Draft", kind: "design", required: true },
+    { id: "layout", label: "Layout Composition", kind: "design", required: true },
+    { id: "states", label: "Interaction State Pass", kind: "design", required: true },
+    { id: "accessibility", label: "Keyboard and Focus QA", kind: "review", required: true },
+    { id: "handoff", label: "UI Handoff Snapshot", kind: "asset", required: false },
+  ],
+};
+
+export const workflowTemplates: WorkflowTemplate[] = [heroFightLeagueTemplate, frontEndDesignTemplate];

@@ -4,7 +4,8 @@ export type StepKind =
   | "asset"
   | "voice"
   | "render"
-  | "review";
+  | "review"
+  | "design";
 
 export type WorkflowStep = {
   id: string;

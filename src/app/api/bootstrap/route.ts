@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getConvexClient } from "@/lib/convex";
 import { convexFunctions } from "@/lib/convex-functions";
-import { heroFightLeagueTemplate } from "@/lib/workflow-templates";
+import { frontEndDesignTemplate, heroFightLeagueTemplate } from "@/lib/workflow-templates";
 import { toSlug } from "@/lib/slug";
 
 export const POST = async (): Promise<NextResponse> => {
@@ -18,7 +18,7 @@ export const POST = async (): Promise<NextResponse> => {
     description: "Main orchestration workspace for Cartoon Hero workflows.",
   });
 
-  const workflowId = await convexClient.mutation(convexFunctions.workflows.upsert, {
+  const heroWorkflowId = await convexClient.mutation(convexFunctions.workflows.upsert, {
     projectId,
     name: heroFightLeagueTemplate.name,
     key: heroFightLeagueTemplate.key,
@@ -26,5 +26,13 @@ export const POST = async (): Promise<NextResponse> => {
     steps: heroFightLeagueTemplate.steps,
   });
 
-  return NextResponse.json({ projectId, workflowId, ownerId });
+  const designWorkflowId = await convexClient.mutation(convexFunctions.workflows.upsert, {
+    projectId,
+    name: frontEndDesignTemplate.name,
+    key: frontEndDesignTemplate.key,
+    version: frontEndDesignTemplate.version,
+    steps: frontEndDesignTemplate.steps,
+  });
+
+  return NextResponse.json({ projectId, heroWorkflowId, designWorkflowId, ownerId });
 };

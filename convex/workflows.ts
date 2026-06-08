@@ -31,6 +31,7 @@ export const upsert = mutation({
           v.literal("voice"),
           v.literal("render"),
           v.literal("review"),
+          v.literal("design"),
         ),
         required: v.boolean(),
       }),

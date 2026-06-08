@@ -1,36 +1,38 @@
 @import "tailwindcss";
 
 :root {
-  --background: #090f23;
-  --background-soft: #101938;
-  --surface: #111b3d;
-  --surface-2: #17244f;
-  --foreground: #e8eefc;
-  --muted: #9ca7c9;
-  --border: #2b3f7a;
-  --accent: #e8a832;
-  --accent-strong: #f6c25b;
-  --danger: #ef5350;
+  --color-bg: #090d1d;
+  --color-bg-soft: #121b3d;
+  --color-surface: #121935;
+  --color-text: #eef3ff;
+  --color-muted: #9faad0;
+  --color-border: #2a3e78;
+  --color-accent: #e8a832;
+  --color-accent-strong: #f6c25b;
+  --color-focus: #ffcd70;
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-text);
   --font-sans: var(--font-space-grotesk);
   --font-mono: var(--font-jetbrains-mono);
 }
 
 body {
   background:
-    radial-gradient(1200px 600px at 85% -5%, #22367a66, transparent 70%),
-    radial-gradient(800px 450px at 10% 110%, #e8a83222, transparent 65%),
-    linear-gradient(180deg, var(--background-soft) 0%, var(--background) 100%);
-  color: var(--foreground);
+    radial-gradient(1500px 720px at 80% -10%, #354fa355, transparent 65%),
+    radial-gradient(900px 500px at -5% 105%, #e8a83220, transparent 55%),
+    linear-gradient(180deg, var(--color-bg-soft) 0%, var(--color-bg) 100%);
+  color: var(--color-text);
   font-family: var(--font-space-grotesk), sans-serif;
 }
 
 * {
-  border-color: var(--border);
+  border-color: var(--color-border);
 }
 
 a,
@@ -40,5 +42,5 @@ button {
 
 ::selection {
   background: #e8a83255;
-  color: var(--foreground);
+  color: var(--color-text);
 }
