@@ -39,8 +39,10 @@ export const modelCatalog: Record<KieMode, ModelOption[]> = {
   image: [
     { id: "gpt-image-2-text-to-image", label: "GPT Image-2" },
     { id: "google/nano-banana", label: "Nano Banana (fast)" },
+    { id: "google/nano-banana-pro", label: "Nano Banana Pro" },
     { id: "grok-imagine/text-to-image", label: "Grok Imagine" },
     { id: "qwen2/text-to-image", label: "Qwen2" },
+    { id: "seedream-v4-text-to-image", label: "Seedream 4" },
   ],
   "image-edit": [
     { id: "gpt-image-2-image-to-image", label: "GPT Image-2 (reference)" },
@@ -50,6 +52,7 @@ export const modelCatalog: Record<KieMode, ModelOption[]> = {
   video: [
     { id: "bytedance/v1-pro-fast-image-to-video", label: "Seedance V1 Pro Fast" },
     { id: "bytedance/v1-pro-image-to-video", label: "Seedance V1 Pro" },
+    { id: "bytedance/v1-lite-image-to-video", label: "Seedance V1 Lite" },
   ],
 };
 

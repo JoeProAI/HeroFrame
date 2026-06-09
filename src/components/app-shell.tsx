@@ -39,6 +39,8 @@ const speeds: Speed[] = ["fast", "balanced", "quality"];
 
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
+const isVideoUrl = (url: string): boolean => /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url);
+
 export const AppShell = () => {
   const { characters, activeCharacter, activeId, setActiveId, addCharacter, removeCharacter } = useCharacters();
   const { presets, activePreset, activeId: presetId, setActiveId: setPresetId, addPreset } = useStylePresets();
@@ -68,6 +70,11 @@ export const AppShell = () => {
   // Style preset creation
   const [presetName, setPresetName] = useState("");
   const [presetText, setPresetText] = useState("");
+
+  // Any-model advanced
+  const [anyModel, setAnyModel] = useState("");
+  const [anyPrompt, setAnyPrompt] = useState("");
+  const [anyParams, setAnyParams] = useState("");
 
   // Fight
   const [fighterAId, setFighterAId] = useState<string>("");
@@ -211,6 +218,42 @@ export const AppShell = () => {
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Fight generation failed.");
+    }
+  };
+
+  // ---- Any model (advanced) ----------------------------------------------
+  const runAnyModel = async () => {
+    if (!anyModel.trim() || !anyPrompt.trim()) {
+      setStatus("error");
+      setMessage("Enter a model id and a prompt.");
+      return;
+    }
+    let parsedInput: Record<string, unknown> | undefined;
+    if (anyParams.trim()) {
+      try {
+        parsedInput = JSON.parse(anyParams) as Record<string, unknown>;
+      } catch {
+        setStatus("error");
+        setMessage("Params must be valid JSON (or leave it blank).");
+        return;
+      }
+    }
+    setStatus("loading");
+    setMessage(`Running ${anyModel.trim()}...`);
+    try {
+      const url = await runKieGeneration({
+        prompt: anyPrompt.trim(),
+        model: anyModel.trim(),
+        input: parsedInput,
+        onProgress: (s) => setMessage(`Working... (${s})`),
+      });
+      addFrame({ url, type: isVideoUrl(url) ? "video" : "image", prompt: anyPrompt.trim(), shot: anyModel.trim() });
+      setStatus("success");
+      setMessage(`Done with ${anyModel.trim()}.`);
+      setTab("frames");
+    } catch (error) {
+      setStatus("error");
+      setMessage(error instanceof Error ? error.message : "Generation failed.");
     }
   };
 
@@ -394,6 +437,24 @@ export const AppShell = () => {
                   <input value={presetName} onChange={(e) => setPresetName(e.target.value)} placeholder="Preset name" className={field} />
                   <input value={presetText} onChange={(e) => setPresetText(e.target.value)} placeholder="style words, e.g. watercolor, soft light" className={field} />
                   <button type="button" onClick={() => { addPreset(presetName, presetText); setPresetName(""); setPresetText(""); }} className={`${btn} border border-[#2e2640] bg-transparent text-[#fbf4e6] hover:bg-[#181320]`}>Add preset</button>
+                </div>
+              </section>
+
+              {/* Any model (advanced) */}
+              <section className={`${panel} border-t-4 border-t-[#8a5cff] p-6 xl:col-span-12`}>
+                <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Any model (advanced)</h2>
+                <p className="mt-1 text-xs text-[#6b6480]">Run any Kie model by id. Optionally pass raw JSON params for that model. Find ids at docs.kie.ai.</p>
+                <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                  <div className="grid gap-3">
+                    <div className="grid gap-2"><label className={labelCls} htmlFor="am">Model id</label><input id="am" value={anyModel} onChange={(e) => setAnyModel(e.target.value)} placeholder="e.g. seedream-v4-text-to-image" className={field} /></div>
+                    <div className="grid gap-2"><label className={labelCls} htmlFor="ap">Prompt</label><textarea id="ap" value={anyPrompt} onChange={(e) => setAnyPrompt(e.target.value)} placeholder="Prompt for the model" className={`${field} min-h-20 py-2`} /></div>
+                    <button type="button" onClick={runAnyModel} disabled={busy} className={`${btn} bg-[#8a5cff] text-[#fbf4e6] hover:bg-[#9d75ff]`}>Run model</button>
+                  </div>
+                  <div className="grid gap-2">
+                    <label className={labelCls} htmlFor="aj">Raw JSON params (optional)</label>
+                    <textarea id="aj" value={anyParams} onChange={(e) => setAnyParams(e.target.value)} placeholder={'{\n  "image_size": "1024x1024",\n  "input_urls": ["https://..."]\n}'} className={`${field} min-h-32 py-2 font-mono`} />
+                    <p className="text-[11px] text-[#6b6480]">Merged into the model&apos;s input. Use the exact param names from that model&apos;s doc page.</p>
+                  </div>
                 </div>
               </section>
             </div>

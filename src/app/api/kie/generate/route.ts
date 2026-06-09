@@ -17,6 +17,8 @@ type GenerateBody = {
   imageSize?: string;
   resolution?: string;
   duration?: string;
+  // Advanced: raw input object passed straight to Kie for any model.
+  input?: Record<string, unknown>;
 };
 
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
@@ -27,28 +29,37 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     return NextResponse.json({ error: "Invalid JSON payload." }, { status: 400 });
   }
 
-  if (!body.prompt?.trim()) {
+  const hasRawInput = body.input && typeof body.input === "object" && Object.keys(body.input).length > 0;
+
+  if (!hasRawInput && !body.prompt?.trim()) {
     return NextResponse.json({ error: "prompt is required." }, { status: 400 });
   }
-  if (body.prompt.length > MAX_PROMPT_LENGTH) {
+  if (body.prompt && body.prompt.length > MAX_PROMPT_LENGTH) {
     return NextResponse.json({ error: "prompt exceeds max length." }, { status: 400 });
   }
 
   const mode: KieMode = body.mode ?? "image";
   const model = body.model?.trim() || resolveKieModel(mode, body.speed ?? "balanced");
 
-  const prompt = body.styleHint?.trim() ? `${body.prompt.trim()}. Style: ${body.styleHint.trim()}` : body.prompt.trim();
-
-  const input: Record<string, unknown> = { prompt };
-  if (mode === "video") {
-    // image-to-video (bytedance/v1-pro-image-to-video): single image_url + clip params.
-    if (body.imageUrls?.length) input.image_url = body.imageUrls[0];
-    input.resolution = body.resolution ?? "720p";
-    input.duration = body.duration ?? "5";
+  let input: Record<string, unknown>;
+  if (hasRawInput) {
+    // Advanced "any model" path: trust the caller's input, but inject the
+    // prompt if they provided one separately and didn't include it.
+    input = { ...(body.input as Record<string, unknown>) };
+    if (body.prompt?.trim() && !("prompt" in input)) input.prompt = body.prompt.trim();
   } else {
-    if (body.imageSize) input.image_size = body.imageSize;
-    // gpt-image-2-image-to-image expects `input_urls`; pass reference images there.
-    if (body.imageUrls?.length) input.input_urls = body.imageUrls;
+    const prompt = body.styleHint?.trim()
+      ? `${body.prompt!.trim()}. Style: ${body.styleHint.trim()}`
+      : body.prompt!.trim();
+    input = { prompt };
+    if (mode === "video") {
+      if (body.imageUrls?.length) input.image_url = body.imageUrls[0];
+      input.resolution = body.resolution ?? "720p";
+      input.duration = body.duration ?? "5";
+    } else {
+      if (body.imageSize) input.image_size = body.imageSize;
+      if (body.imageUrls?.length) input.input_urls = body.imageUrls;
+    }
   }
 
   let callBackUrl: string | undefined;

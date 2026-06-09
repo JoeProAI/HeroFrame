@@ -10,6 +10,7 @@ export type RunKieParams = {
   imageUrls?: string[];
   resolution?: string;
   duration?: string;
+  input?: Record<string, unknown>;
   onProgress?: (state: string) => void;
 };
 
@@ -44,6 +45,7 @@ export const runKieGeneration = async (params: RunKieParams): Promise<string> =>
       imageUrls: params.imageUrls,
       resolution: params.resolution,
       duration: params.duration,
+      input: params.input,
     }),
   });
   const payload = (await response.json().catch(() => null)) as GenerateResponse | null;
