@@ -129,6 +129,22 @@ export const getKieTask = async (taskId: string): Promise<KieTaskRecord> => {
   };
 };
 
+export const getKieCredits = async (): Promise<number | null> => {
+  const { apiKey, baseUrl } = getKieEnv();
+  const response = await fetchWithRetry(`${baseUrl}/api/v1/chat/credit`, {
+    method: "GET",
+    headers: authHeaders(apiKey),
+  });
+  const text = await response.text();
+  if (!response.ok) return null;
+  try {
+    const parsed = JSON.parse(text) as { data?: unknown };
+    return typeof parsed.data === "number" ? parsed.data : null;
+  } catch {
+    return null;
+  }
+};
+
 // Bounded server-side wait so fast models can return inline; otherwise the
 // caller falls back to client polling via the task-status route.
 export const waitForKieTask = async (taskId: string, budgetMs = 7_000): Promise<KieTaskRecord> => {

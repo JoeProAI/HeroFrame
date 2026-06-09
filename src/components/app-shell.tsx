@@ -1,25 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { runKieGeneration } from "@/lib/kie/run-client";
 import { useCharacters } from "@/lib/use-characters";
 import { useStylePresets } from "@/lib/use-style-presets";
+import { useFrames, type Frame } from "@/lib/use-frames";
 import { buildFightShots, expandShots } from "@/lib/shots";
 import { modelCatalog, defaultModel } from "@/lib/kie/models";
 
 type Status = "idle" | "loading" | "success" | "error";
 type Speed = "fast" | "balanced" | "quality";
 type Tab = "cast" | "scenes" | "fight" | "frames";
-
-type Frame = {
-  id: string;
-  url: string;
-  type: "image" | "video";
-  prompt: string;
-  characterName?: string;
-  shot?: string;
-  createdAt: number;
-};
 
 const panel = "rounded-2xl border border-[#2e2640] bg-[#181320]";
 const labelCls = "text-[11px] font-bold uppercase tracking-[0.16em] text-[#b3a7c4]";
@@ -37,19 +28,19 @@ const tabs: { id: Tab; label: string; dot: string }[] = [
 
 const speeds: Speed[] = ["fast", "balanced", "quality"];
 
-const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-
 const isVideoUrl = (url: string): boolean => /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url);
 
 export const AppShell = () => {
   const { characters, activeCharacter, activeId, setActiveId, addCharacter, removeCharacter } = useCharacters();
   const { presets, activePreset, activeId: presetId, setActiveId: setPresetId, addPreset } = useStylePresets();
+  const { frames, addFrame, clearFrames } = useFrames();
 
   const [tab, setTab] = useState<Tab>("cast");
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState("");
-  const [frames, setFrames] = useState<Frame[]>([]);
   const [speed, setSpeed] = useState<Speed>("balanced");
+  const [credits, setCredits] = useState<number | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   // Model selection per mode
   const [imageModel, setImageModel] = useState<string>(defaultModel.image);
@@ -84,8 +75,58 @@ export const AppShell = () => {
   const busy = status === "loading";
   const styleHint = activePreset?.text;
 
-  const addFrame = (frame: Omit<Frame, "id" | "createdAt">) =>
-    setFrames((prev) => [{ ...frame, id: uid(), createdAt: Date.now() }, ...prev]);
+  const refreshCredits = async () => {
+    try {
+      const response = await fetch("/api/kie/credits");
+      const payload = (await response.json().catch(() => null)) as { ok?: boolean; credits?: number | null } | null;
+      if (response.ok && payload?.ok) setCredits(payload.credits ?? null);
+    } catch {
+      // non-fatal
+    }
+  };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refreshCredits();
+  }, []);
+
+  // ---- Upload your own reference -----------------------------------------
+  const uploadReference = async (file: File) => {
+    if (!charName.trim()) {
+      setStatus("error");
+      setMessage("Name the character before uploading a reference.");
+      return;
+    }
+    setUploading(true);
+    setStatus("loading");
+    setMessage("Uploading reference image...");
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("Could not read file."));
+        reader.readAsDataURL(file);
+      });
+      const response = await fetch("/api/kie/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ base64Data: dataUrl, fileName: file.name }),
+      });
+      const payload = (await response.json().catch(() => null)) as { ok?: boolean; url?: string; error?: string } | null;
+      if (!response.ok || !payload?.ok || !payload.url) {
+        throw new Error(payload?.error ?? "Upload failed.");
+      }
+      addCharacter(charName, payload.url);
+      setCharName("");
+      setStatus("success");
+      setMessage("Reference uploaded and character saved.");
+    } catch (error) {
+      setStatus("error");
+      setMessage(error instanceof Error ? error.message : "Upload failed.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   // ---- Cast ---------------------------------------------------------------
   const createCharacterFromPrompt = async () => {
@@ -160,6 +201,7 @@ export const AppShell = () => {
       setStatus("success");
       setMessage(`Generated ${shots.length} shots${activeCharacter ? ` with ${activeCharacter.name}` : ""}.`);
       setTab("frames");
+      void refreshCredits();
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Multi-shot generation failed.");
@@ -185,6 +227,7 @@ export const AppShell = () => {
       setStatus("success");
       setMessage(`Generated ${variantCount} variants.`);
       setTab("frames");
+      void refreshCredits();
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Variation generation failed.");
@@ -215,6 +258,7 @@ export const AppShell = () => {
       setStatus("success");
       setMessage(`Built a ${shots.length}-shot fight: ${fighterA.name} vs ${fighterB.name}.`);
       setTab("frames");
+      void refreshCredits();
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Fight generation failed.");
@@ -251,6 +295,7 @@ export const AppShell = () => {
       setStatus("success");
       setMessage(`Done with ${anyModel.trim()}.`);
       setTab("frames");
+      void refreshCredits();
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Generation failed.");
@@ -276,6 +321,7 @@ export const AppShell = () => {
       setStatus("success");
       setMessage("Clip ready.");
       setTab("frames");
+      void refreshCredits();
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Animation failed.");
@@ -315,6 +361,9 @@ export const AppShell = () => {
             <p className="text-xs font-semibold text-[#fbf4e6]">{status}</p>
           </div>
           <p className="mt-1 text-[11px] leading-4 text-[#6b6480]">{characters.length} cast · {frames.length} frames</p>
+          <button type="button" onClick={refreshCredits} className="mt-2 w-full rounded-lg border border-[#2e2640] px-2 py-1 text-left text-[11px] text-[#b3a7c4] transition hover:text-[#fbf4e6]">
+            Kie credits: <span className="font-bold text-[#ffd23f]">{credits === null ? "—" : credits}</span>
+          </button>
         </div>
       </aside>
 
@@ -373,6 +422,17 @@ export const AppShell = () => {
                   <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[#6b6480]"><span className="h-px flex-1 bg-[#2e2640]" /> or paste URL <span className="h-px flex-1 bg-[#2e2640]" /></div>
                   <input value={charUrl} onChange={(e) => setCharUrl(e.target.value)} placeholder="https://image-url..." className={field} />
                   <button type="button" onClick={createCharacterFromUrl} disabled={busy} className={`${btn} border border-[#2e2640] bg-transparent text-[#fbf4e6] hover:bg-[#181320]`}>Save from URL</button>
+                  <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[#6b6480]"><span className="h-px flex-1 bg-[#2e2640]" /> or upload a photo <span className="h-px flex-1 bg-[#2e2640]" /></div>
+                  <label className={`${btn} cursor-pointer border border-[#2e2640] bg-transparent text-[#fbf4e6] hover:bg-[#181320] ${uploading ? "opacity-40" : ""}`}>
+                    {uploading ? "Uploading..." : "Upload reference image"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={uploading || busy}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadReference(f); e.target.value = ""; }}
+                    />
+                  </label>
                 </div>
               </section>
 
@@ -491,7 +551,7 @@ export const AppShell = () => {
             <section className={`${panel} border-t-4 border-t-[#ffd23f] p-6`}>
               <div className="flex items-center justify-between gap-3">
                 <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Frames & clips ({frames.length})</h2>
-                {frames.length > 0 ? <button type="button" onClick={() => setFrames([])} className="rounded-full border border-[#2e2640] px-3 py-1 text-[11px] font-bold uppercase text-[#b3a7c4] hover:text-[#fbf4e6]">Clear</button> : null}
+                {frames.length > 0 ? <button type="button" onClick={clearFrames} className="rounded-full border border-[#2e2640] px-3 py-1 text-[11px] font-bold uppercase text-[#b3a7c4] hover:text-[#fbf4e6]">Clear</button> : null}
               </div>
               {frames.length === 0 ? (
                 <div className="mt-4 flex min-h-64 items-center justify-center rounded-xl border border-dashed border-[#2e2640] bg-[#0c0a12] text-center">
