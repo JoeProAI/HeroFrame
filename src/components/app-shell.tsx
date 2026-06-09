@@ -439,7 +439,17 @@ export const AppShell = () => {
               <section className={`${panel} border-t-4 border-t-[#2ec4b6] p-6 xl:col-span-7`}>
                 <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Cast ({characters.length})</h2>
                 {characters.length === 0 ? (
-                  <p className="mt-4 text-sm text-[#6b6480]">No heroes yet. Create one on the left.</p>
+                  <div className="mt-4">
+                    <p className="text-sm text-[#6b6480]">No heroes yet. Here are some cartoon styles to spark ideas — create your own on the left.</p>
+                    <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      {["bg-hero", "bg-manga", "bg-chibi", "bg-mecha", "bg-noir"].map((name) => (
+                        <figure key={name} className="overflow-hidden rounded-xl border border-[#2e2640] bg-[#0c0a12]">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={`/bg/${name}.png`} alt="Sample cartoon style" className="aspect-square w-full object-cover" />
+                        </figure>
+                      ))}
+                    </div>
+                  </div>
                 ) : (
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     {characters.map((c) => (
