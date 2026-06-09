@@ -12,7 +12,7 @@ type Status = "idle" | "loading" | "success" | "error";
 type Speed = "fast" | "balanced" | "quality";
 type Tab = "cast" | "scenes" | "fight" | "frames";
 
-const panel = "rounded-2xl border border-[#2e2640] bg-[#181320]/65 backdrop-blur-sm";
+const panel = "rounded-2xl border border-[#2e2640] bg-[#181320]/55 backdrop-blur-sm";
 const labelCls = "text-[11px] font-bold uppercase tracking-[0.16em] text-[#b3a7c4]";
 const field =
   "min-h-11 w-full rounded-xl border border-[#2e2640] bg-[#0c0a12] px-3 text-sm text-[#fbf4e6] placeholder:text-[#6b6480] outline-none transition focus-visible:border-[#ffd23f] focus-visible:ring-1 focus-visible:ring-[#ffd23f]";

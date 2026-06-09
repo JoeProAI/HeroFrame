@@ -1,11 +1,12 @@
 // Scattered, low-opacity cartoon art behind the whole app. Generated with
 // gpt-image-2 and saved as static assets in /public/bg (zero runtime cost).
 const tiles = [
-  { src: "/bg/bg-hero.png", className: "left-[-3%] top-[3%] h-80 w-80 -rotate-6" },
-  { src: "/bg/bg-manga.png", className: "right-[-4%] top-[7%] h-96 w-96 rotate-6" },
-  { src: "/bg/bg-chibi.png", className: "left-[5%] bottom-[3%] h-72 w-72 rotate-3" },
-  { src: "/bg/bg-mecha.png", className: "right-[6%] bottom-[-5%] h-80 w-80 -rotate-3" },
-  { src: "/bg/bg-noir.png", className: "left-[36%] top-[34%] h-[24rem] w-[24rem] rotate-2" },
+  { src: "/bg/bg-hero.png", className: "left-[2%] top-[4%] h-80 w-80 -rotate-6" },
+  { src: "/bg/bg-manga.png", className: "right-[2%] top-[6%] h-96 w-96 rotate-6" },
+  { src: "/bg/bg-chibi.png", className: "left-[20%] top-[40%] h-[26rem] w-[26rem] rotate-3" },
+  { src: "/bg/bg-mecha.png", className: "right-[16%] top-[44%] h-[26rem] w-[26rem] -rotate-3" },
+  { src: "/bg/bg-noir.png", className: "left-[4%] bottom-[2%] h-80 w-80 rotate-2" },
+  { src: "/bg/bg-hero.png", className: "right-[4%] bottom-[1%] h-80 w-80 -rotate-2" },
 ];
 
 // Sits behind the translucent panels so the cartoon art shows through the
