@@ -6,10 +6,12 @@
 
 body {
   background:
-    radial-gradient(circle at 85% -5%, #e8a83218, transparent 45%),
-    radial-gradient(circle at 10% 105%, #2a3350cc, transparent 50%),
-    #0b0d14;
-  color: #e9ecf3;
+    radial-gradient(circle at 12% 8%, #8a5cff33, transparent 40%),
+    radial-gradient(circle at 88% 6%, #2ec4b633, transparent 38%),
+    radial-gradient(circle at 78% 96%, #ff5a3c2e, transparent 44%),
+    radial-gradient(circle at 20% 90%, #ffd23f24, transparent 40%),
+    #0c0a12;
+  color: #fbf4e6;
   font-family: var(--font-space-grotesk), system-ui, sans-serif;
 }
 
@@ -20,9 +22,9 @@ body::before {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.04;
-  background-image: radial-gradient(#e9ecf3 1px, transparent 1.3px);
-  background-size: 22px 22px;
+  opacity: 0.05;
+  background-image: radial-gradient(#fbf4e6 1px, transparent 1.3px);
+  background-size: 18px 18px;
 }
 
 body > * {
@@ -31,6 +33,6 @@ body > * {
 }
 
 ::selection {
-  background: #e8a832;
-  color: #0b0d14;
+  background: #ffd23f;
+  color: #05040a;
 }

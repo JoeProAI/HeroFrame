@@ -15,7 +15,7 @@ export const BackgroundArt = () => (
     {tiles.map((tile, index) => (
       <div
         key={index}
-        className={`absolute rounded-[2rem] bg-contain bg-center bg-no-repeat opacity-[0.5] ${tile.className}`}
+        className={`absolute rounded-[2rem] bg-contain bg-center bg-no-repeat opacity-[0.8] ${tile.className}`}
         style={{ backgroundImage: `url(${tile.src})` }}
       />
     ))}

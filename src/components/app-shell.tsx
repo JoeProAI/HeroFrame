@@ -12,19 +12,18 @@ type Status = "idle" | "loading" | "success" | "error";
 type Speed = "fast" | "balanced" | "quality";
 type Tab = "cast" | "scenes" | "fight" | "frames";
 
-const panel = "rounded-2xl border border-[#272b38] bg-[#15171f]/80 backdrop-blur-md";
-// palette: amber accent + slate neutrals
-const labelCls = "text-[11px] font-bold uppercase tracking-[0.16em] text-[#98a1b5]";
+const panel = "rounded-2xl border border-[#2e2640] bg-[#181320]/65 backdrop-blur-sm";
+const labelCls = "text-[11px] font-bold uppercase tracking-[0.16em] text-[#b3a7c4]";
 const field =
-  "min-h-11 w-full rounded-xl border border-[#272b38] bg-[#0c0d13] px-3 text-sm text-[#e9ecf3] placeholder:text-[#7c8499] outline-none transition focus-visible:border-[#e8a832] focus-visible:ring-1 focus-visible:ring-[#e8a832]";
+  "min-h-11 w-full rounded-xl border border-[#2e2640] bg-[#0c0a12] px-3 text-sm text-[#fbf4e6] placeholder:text-[#6b6480] outline-none transition focus-visible:border-[#ffd23f] focus-visible:ring-1 focus-visible:ring-[#ffd23f]";
 const btn =
-  "inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-bold transition hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e8a832] disabled:cursor-not-allowed disabled:opacity-40 disabled:translate-y-0";
+  "inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-bold transition hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffd23f] disabled:cursor-not-allowed disabled:opacity-40 disabled:translate-y-0";
 
 const tabs: { id: Tab; label: string; dot: string }[] = [
-  { id: "cast", label: "Cast", dot: "#7f8ba3" },
-  { id: "scenes", label: "Scenes", dot: "#e8a832" },
-  { id: "fight", label: "Fight League", dot: "#7f8ba3" },
-  { id: "frames", label: "Frames", dot: "#e8a832" },
+  { id: "cast", label: "Cast", dot: "#8a5cff" },
+  { id: "scenes", label: "Scenes", dot: "#ff5a3c" },
+  { id: "fight", label: "Fight League", dot: "#2ec4b6" },
+  { id: "frames", label: "Frames", dot: "#ffd23f" },
 ];
 
 const speeds: Speed[] = ["fast", "balanced", "quality"];
@@ -331,79 +330,79 @@ export const AppShell = () => {
 
   const feedbackColor =
     status === "error"
-      ? "border-[#e5564e] bg-[#e5564e]/12 text-[#f0978f]"
+      ? "border-[#ff5a3c] bg-[#ff5a3c]/12 text-[#ff8c79]"
       : status === "success"
-        ? "border-[#5fae7f] bg-[#5fae7f]/12 text-[#9bd3b0]"
-        : "border-[#272b38] bg-[#0c0d13] text-[#98a1b5]";
-  const statusDot = status === "error" ? "#e5564e" : status === "success" ? "#5fae7f" : status === "loading" ? "#e8a832" : "#7c8499";
+        ? "border-[#4ade80] bg-[#4ade80]/12 text-[#86efac]"
+        : "border-[#2e2640] bg-[#0c0a12] text-[#b3a7c4]";
+  const statusDot = status === "error" ? "#ff5a3c" : status === "success" ? "#4ade80" : status === "loading" ? "#ffd23f" : "#6b6480";
 
   return (
     <div className="flex min-h-screen w-full">
       {/* SIDEBAR / TABS */}
-      <aside className="sticky top-0 hidden h-screen w-60 flex-none flex-col border-r border-[#272b38] bg-[#0c0d13]/80 p-5 lg:flex">
+      <aside className="sticky top-0 hidden h-screen w-60 flex-none flex-col border-r border-[#2e2640] bg-[#0c0a12]/80 p-5 lg:flex">
         <div className="flex items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#e8a832] font-[family-name:var(--font-bricolage)] text-lg font-black text-[#05040a]">H</span>
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#ff5a3c] font-[family-name:var(--font-bricolage)] text-lg font-black text-[#05040a]">H</span>
           <div>
             <p className="font-[family-name:var(--font-bricolage)] text-base font-black leading-none">Heroframe</p>
-            <p className="text-[10px] uppercase tracking-[0.18em] text-[#7c8499]">Cartoon maker</p>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-[#6b6480]">Cartoon maker</p>
           </div>
         </div>
         <nav className="mt-8 flex flex-col gap-1">
           {tabs.map((t) => (
-            <button key={t.id} type="button" onClick={() => setTab(t.id)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${tab === t.id ? "bg-[#15171f] text-[#e9ecf3]" : "text-[#98a1b5] hover:bg-[#15171f] hover:text-[#e9ecf3]"}`}>
+            <button key={t.id} type="button" onClick={() => setTab(t.id)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${tab === t.id ? "bg-[#181320] text-[#fbf4e6]" : "text-[#b3a7c4] hover:bg-[#181320] hover:text-[#fbf4e6]"}`}>
               <span className="h-2.5 w-2.5 rounded-full" style={{ background: t.dot }} />
               {t.label}
             </button>
           ))}
         </nav>
-        <div className="mt-auto rounded-xl border border-[#272b38] bg-[#15171f] p-3">
+        <div className="mt-auto rounded-xl border border-[#2e2640] bg-[#181320] p-3">
           <div className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full" style={{ background: statusDot }} />
-            <p className="text-xs font-semibold text-[#e9ecf3]">{status}</p>
+            <p className="text-xs font-semibold text-[#fbf4e6]">{status}</p>
           </div>
-          <p className="mt-1 text-[11px] leading-4 text-[#7c8499]">{characters.length} cast · {frames.length} frames</p>
-          <button type="button" onClick={refreshCredits} className="mt-2 w-full rounded-lg border border-[#272b38] px-2 py-1 text-left text-[11px] text-[#98a1b5] transition hover:text-[#e9ecf3]">
-            Kie credits: <span className="font-bold text-[#e8a832]">{credits === null ? "—" : credits}</span>
+          <p className="mt-1 text-[11px] leading-4 text-[#6b6480]">{characters.length} cast · {frames.length} frames</p>
+          <button type="button" onClick={refreshCredits} className="mt-2 w-full rounded-lg border border-[#2e2640] px-2 py-1 text-left text-[11px] text-[#b3a7c4] transition hover:text-[#fbf4e6]">
+            Kie credits: <span className="font-bold text-[#ffd23f]">{credits === null ? "—" : credits}</span>
           </button>
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-[#272b38] bg-[#0c0d13]/85 px-5 py-3 backdrop-blur sm:px-8">
+        <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-[#2e2640] bg-[#0c0a12]/85 px-5 py-3 backdrop-blur sm:px-8">
           <div className="flex items-center gap-3">
-            <span className="rounded-full bg-[#e8a832] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#05040a]">Ages of Cartoons</span>
+            <span className="rounded-full bg-[#ffd23f] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#05040a]">Ages of Cartoons</span>
             <h1 className="font-[family-name:var(--font-bricolage)] text-lg font-black uppercase tracking-tight sm:text-xl">Cartoon Studio</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {/* Image model */}
-            <select value={imageModel} onChange={(e) => setImageModel(e.target.value)} title="Text-to-image model" className="min-h-9 rounded-lg border border-[#272b38] bg-[#0c0d13] px-2 text-xs text-[#e9ecf3]">
+            <select value={imageModel} onChange={(e) => setImageModel(e.target.value)} title="Text-to-image model" className="min-h-9 rounded-lg border border-[#2e2640] bg-[#0c0a12] px-2 text-xs text-[#fbf4e6]">
               {modelCatalog.image.map((m) => <option key={m.id} value={m.id}>img: {m.label}</option>)}
             </select>
             {/* Edit model */}
-            <select value={editModel} onChange={(e) => setEditModel(e.target.value)} title="Character-reference (image-to-image) model" className="min-h-9 rounded-lg border border-[#272b38] bg-[#0c0d13] px-2 text-xs text-[#e9ecf3]">
+            <select value={editModel} onChange={(e) => setEditModel(e.target.value)} title="Character-reference (image-to-image) model" className="min-h-9 rounded-lg border border-[#2e2640] bg-[#0c0a12] px-2 text-xs text-[#fbf4e6]">
               {modelCatalog["image-edit"].map((m) => <option key={m.id} value={m.id}>ref: {m.label}</option>)}
             </select>
             {/* Video model */}
-            <select value={videoModel} onChange={(e) => setVideoModel(e.target.value)} title="Image-to-video model" className="min-h-9 rounded-lg border border-[#272b38] bg-[#0c0d13] px-2 text-xs text-[#e9ecf3]">
+            <select value={videoModel} onChange={(e) => setVideoModel(e.target.value)} title="Image-to-video model" className="min-h-9 rounded-lg border border-[#2e2640] bg-[#0c0a12] px-2 text-xs text-[#fbf4e6]">
               {modelCatalog.video.map((m) => <option key={m.id} value={m.id}>vid: {m.label}</option>)}
             </select>
             {/* Style preset selector */}
-            <select value={presetId ?? ""} onChange={(e) => setPresetId(e.target.value || null)} title="Style preset" className="min-h-9 rounded-lg border border-[#272b38] bg-[#0c0d13] px-2 text-xs text-[#e9ecf3]">
+            <select value={presetId ?? ""} onChange={(e) => setPresetId(e.target.value || null)} title="Style preset" className="min-h-9 rounded-lg border border-[#2e2640] bg-[#0c0a12] px-2 text-xs text-[#fbf4e6]">
               <option value="">No style</option>
               {presets.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
             <div className="flex gap-1">
               {speeds.map((s) => (
-                <button key={s} type="button" onClick={() => setSpeed(s)} className={`rounded-lg border px-2 py-1 text-[11px] font-bold capitalize ${speed === s ? "border-[#7f8ba3] bg-[#7f8ba3] text-[#05040a]" : "border-[#272b38] text-[#98a1b5]"}`}>{s}</button>
+                <button key={s} type="button" onClick={() => setSpeed(s)} className={`rounded-lg border px-2 py-1 text-[11px] font-bold capitalize ${speed === s ? "border-[#2ec4b6] bg-[#2ec4b6] text-[#05040a]" : "border-[#2e2640] text-[#b3a7c4]"}`}>{s}</button>
               ))}
             </div>
           </div>
         </header>
 
         {/* Tab strip for mobile */}
-        <div className="flex gap-2 overflow-x-auto border-b border-[#272b38] px-5 py-2 lg:hidden">
+        <div className="flex gap-2 overflow-x-auto border-b border-[#2e2640] px-5 py-2 lg:hidden">
           {tabs.map((t) => (
-            <button key={t.id} type="button" onClick={() => setTab(t.id)} className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-bold ${tab === t.id ? "bg-[#e8a832] text-[#05040a]" : "border border-[#272b38] text-[#98a1b5]"}`}>{t.label}</button>
+            <button key={t.id} type="button" onClick={() => setTab(t.id)} className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-bold ${tab === t.id ? "bg-[#ffd23f] text-[#05040a]" : "border border-[#2e2640] text-[#b3a7c4]"}`}>{t.label}</button>
           ))}
         </div>
 
@@ -413,18 +412,18 @@ export const AppShell = () => {
           {/* CAST */}
           {tab === "cast" ? (
             <div className="grid gap-5 xl:grid-cols-12">
-              <section className={`${panel} border-t-4 border-t-[#7f8ba3] p-6 xl:col-span-5`}>
+              <section className={`${panel} border-t-4 border-t-[#8a5cff] p-6 xl:col-span-5`}>
                 <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Create a hero</h2>
-                <p className="mt-1 text-xs text-[#7c8499]">Save a hero once. Reuse the same look across every scene and fight.</p>
+                <p className="mt-1 text-xs text-[#6b6480]">Save a hero once. Reuse the same look across every scene and fight.</p>
                 <div className="mt-4 grid gap-3">
                   <div className="grid gap-2"><label className={labelCls} htmlFor="cn">Name</label><input id="cn" value={charName} onChange={(e) => setCharName(e.target.value)} placeholder="e.g. Captain Rook" className={field} /></div>
                   <div className="grid gap-2"><label className={labelCls} htmlFor="cp">Describe the hero</label><textarea id="cp" value={charPrompt} onChange={(e) => setCharPrompt(e.target.value)} placeholder="stocky knight, copper armor, scar over left eye, teal cape" className={`${field} min-h-24 py-2`} /></div>
-                  <button type="button" onClick={createCharacterFromPrompt} disabled={busy} className={`${btn} bg-[#7f8ba3] text-[#e9ecf3] hover:bg-[#9aa6bd]`}>Generate reference + save</button>
-                  <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[#7c8499]"><span className="h-px flex-1 bg-[#272b38]" /> or paste URL <span className="h-px flex-1 bg-[#272b38]" /></div>
+                  <button type="button" onClick={createCharacterFromPrompt} disabled={busy} className={`${btn} bg-[#8a5cff] text-[#fbf4e6] hover:bg-[#9d75ff]`}>Generate reference + save</button>
+                  <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[#6b6480]"><span className="h-px flex-1 bg-[#2e2640]" /> or paste URL <span className="h-px flex-1 bg-[#2e2640]" /></div>
                   <input value={charUrl} onChange={(e) => setCharUrl(e.target.value)} placeholder="https://image-url..." className={field} />
-                  <button type="button" onClick={createCharacterFromUrl} disabled={busy} className={`${btn} border border-[#272b38] bg-transparent text-[#e9ecf3] hover:bg-[#15171f]`}>Save from URL</button>
-                  <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[#7c8499]"><span className="h-px flex-1 bg-[#272b38]" /> or upload a photo <span className="h-px flex-1 bg-[#272b38]" /></div>
-                  <label className={`${btn} cursor-pointer border border-[#272b38] bg-transparent text-[#e9ecf3] hover:bg-[#15171f] ${uploading ? "opacity-40" : ""}`}>
+                  <button type="button" onClick={createCharacterFromUrl} disabled={busy} className={`${btn} border border-[#2e2640] bg-transparent text-[#fbf4e6] hover:bg-[#181320]`}>Save from URL</button>
+                  <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[#6b6480]"><span className="h-px flex-1 bg-[#2e2640]" /> or upload a photo <span className="h-px flex-1 bg-[#2e2640]" /></div>
+                  <label className={`${btn} cursor-pointer border border-[#2e2640] bg-transparent text-[#fbf4e6] hover:bg-[#181320] ${uploading ? "opacity-40" : ""}`}>
                     {uploading ? "Uploading..." : "Upload reference image"}
                     <input
                       type="file"
@@ -437,21 +436,21 @@ export const AppShell = () => {
                 </div>
               </section>
 
-              <section className={`${panel} border-t-4 border-t-[#7f8ba3] p-6 xl:col-span-7`}>
+              <section className={`${panel} border-t-4 border-t-[#2ec4b6] p-6 xl:col-span-7`}>
                 <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Cast ({characters.length})</h2>
                 {characters.length === 0 ? (
-                  <p className="mt-4 text-sm text-[#7c8499]">No heroes yet. Create one on the left.</p>
+                  <p className="mt-4 text-sm text-[#6b6480]">No heroes yet. Create one on the left.</p>
                 ) : (
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     {characters.map((c) => (
-                      <div key={c.id} className={`flex gap-3 rounded-xl border p-3 ${c.id === activeId ? "border-[#7f8ba3] bg-[#7f8ba3]/10" : "border-[#272b38] bg-[#0c0d13]"}`}>
+                      <div key={c.id} className={`flex gap-3 rounded-xl border p-3 ${c.id === activeId ? "border-[#8a5cff] bg-[#8a5cff]/10" : "border-[#2e2640] bg-[#0c0a12]"}`}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={c.referenceUrl} alt={c.name} className="h-16 w-16 flex-none rounded-lg border border-[#272b38] object-cover" />
+                        <img src={c.referenceUrl} alt={c.name} className="h-16 w-16 flex-none rounded-lg border border-[#2e2640] object-cover" />
                         <div className="flex min-w-0 flex-1 flex-col">
-                          <span className="truncate text-sm font-bold text-[#e9ecf3]">{c.name}</span>
+                          <span className="truncate text-sm font-bold text-[#fbf4e6]">{c.name}</span>
                           <div className="mt-auto flex gap-2">
-                            <button type="button" onClick={() => setActiveId(c.id)} className={`rounded-lg px-2 py-1 text-[11px] font-bold ${c.id === activeId ? "bg-[#7f8ba3] text-[#e9ecf3]" : "border border-[#272b38] text-[#98a1b5] hover:text-[#e9ecf3]"}`}>{c.id === activeId ? "active" : "use"}</button>
-                            <button type="button" onClick={() => removeCharacter(c.id)} className="rounded-lg px-2 py-1 text-[11px] text-[#7c8499] hover:text-[#e8a832]">remove</button>
+                            <button type="button" onClick={() => setActiveId(c.id)} className={`rounded-lg px-2 py-1 text-[11px] font-bold ${c.id === activeId ? "bg-[#8a5cff] text-[#fbf4e6]" : "border border-[#2e2640] text-[#b3a7c4] hover:text-[#fbf4e6]"}`}>{c.id === activeId ? "active" : "use"}</button>
+                            <button type="button" onClick={() => removeCharacter(c.id)} className="rounded-lg px-2 py-1 text-[11px] text-[#6b6480] hover:text-[#ff5a3c]">remove</button>
                           </div>
                         </div>
                       </div>
@@ -465,9 +464,9 @@ export const AppShell = () => {
           {/* SCENES */}
           {tab === "scenes" ? (
             <div className="grid gap-5 xl:grid-cols-12">
-              <section className={`${panel} border-t-4 border-t-[#e8a832] p-6 xl:col-span-7`}>
+              <section className={`${panel} border-t-4 border-t-[#ff5a3c] p-6 xl:col-span-7`}>
                 <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Multi-shot scene</h2>
-                <p className="mt-1 text-xs text-[#7c8499]">One beat becomes a coordinated shot sequence{activeCharacter ? `, locked to ${activeCharacter.name}` : ""}.</p>
+                <p className="mt-1 text-xs text-[#6b6480]">One beat becomes a coordinated shot sequence{activeCharacter ? `, locked to ${activeCharacter.name}` : ""}.</p>
                 <div className="mt-4 grid gap-3">
                   <div className="grid gap-2"><label className={labelCls} htmlFor="st">Scene title</label><input id="st" value={sceneTitle} onChange={(e) => setSceneTitle(e.target.value)} placeholder="e.g. Rooftop standoff" className={field} /></div>
                   <div className="grid gap-2"><label className={labelCls} htmlFor="sb">Story beat</label><textarea id="sb" value={storyBeat} onChange={(e) => setStoryBeat(e.target.value)} placeholder="What happens in this scene?" className={`${field} min-h-24 py-2`} /></div>
@@ -481,40 +480,40 @@ export const AppShell = () => {
                   </div>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <button type="button" onClick={generateMultiShot} disabled={busy} className={`${btn} bg-[#e8a832] text-[#e9ecf3] hover:bg-[#f0b95a]`}>Generate {shotCount} shots</button>
-                  <button type="button" onClick={generateVariations} disabled={busy} className={`${btn} border border-[#272b38] bg-transparent text-[#e9ecf3] hover:bg-[#15171f]`}>{variantCount} variations</button>
+                  <button type="button" onClick={generateMultiShot} disabled={busy} className={`${btn} bg-[#ff5a3c] text-[#fbf4e6] hover:bg-[#ff7259]`}>Generate {shotCount} shots</button>
+                  <button type="button" onClick={generateVariations} disabled={busy} className={`${btn} border border-[#2e2640] bg-transparent text-[#fbf4e6] hover:bg-[#181320]`}>{variantCount} variations</button>
                 </div>
               </section>
 
-              <section className={`${panel} border-t-4 border-t-[#e8a832] p-6 xl:col-span-5`}>
+              <section className={`${panel} border-t-4 border-t-[#ffd23f] p-6 xl:col-span-5`}>
                 <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Style presets</h2>
-                <p className="mt-1 text-xs text-[#7c8499]">Active: <span className="font-bold text-[#e8a832]">{activePreset?.name ?? "none"}</span></p>
+                <p className="mt-1 text-xs text-[#6b6480]">Active: <span className="font-bold text-[#ffd23f]">{activePreset?.name ?? "none"}</span></p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {presets.map((p) => (
-                    <button key={p.id} type="button" onClick={() => setPresetId(p.id === presetId ? null : p.id)} className={`rounded-full px-3 py-1.5 text-xs font-bold ${p.id === presetId ? "bg-[#e8a832] text-[#05040a]" : "border border-[#272b38] text-[#98a1b5] hover:text-[#e9ecf3]"}`}>{p.name}</button>
+                    <button key={p.id} type="button" onClick={() => setPresetId(p.id === presetId ? null : p.id)} className={`rounded-full px-3 py-1.5 text-xs font-bold ${p.id === presetId ? "bg-[#ffd23f] text-[#05040a]" : "border border-[#2e2640] text-[#b3a7c4] hover:text-[#fbf4e6]"}`}>{p.name}</button>
                   ))}
                 </div>
                 <div className="mt-4 grid gap-2">
                   <input value={presetName} onChange={(e) => setPresetName(e.target.value)} placeholder="Preset name" className={field} />
                   <input value={presetText} onChange={(e) => setPresetText(e.target.value)} placeholder="style words, e.g. watercolor, soft light" className={field} />
-                  <button type="button" onClick={() => { addPreset(presetName, presetText); setPresetName(""); setPresetText(""); }} className={`${btn} border border-[#272b38] bg-transparent text-[#e9ecf3] hover:bg-[#15171f]`}>Add preset</button>
+                  <button type="button" onClick={() => { addPreset(presetName, presetText); setPresetName(""); setPresetText(""); }} className={`${btn} border border-[#2e2640] bg-transparent text-[#fbf4e6] hover:bg-[#181320]`}>Add preset</button>
                 </div>
               </section>
 
               {/* Any model (advanced) */}
-              <section className={`${panel} border-t-4 border-t-[#7f8ba3] p-6 xl:col-span-12`}>
+              <section className={`${panel} border-t-4 border-t-[#8a5cff] p-6 xl:col-span-12`}>
                 <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Any model (advanced)</h2>
-                <p className="mt-1 text-xs text-[#7c8499]">Run any Kie model by id. Optionally pass raw JSON params for that model. Find ids at docs.kie.ai.</p>
+                <p className="mt-1 text-xs text-[#6b6480]">Run any Kie model by id. Optionally pass raw JSON params for that model. Find ids at docs.kie.ai.</p>
                 <div className="mt-4 grid gap-3 lg:grid-cols-2">
                   <div className="grid gap-3">
                     <div className="grid gap-2"><label className={labelCls} htmlFor="am">Model id</label><input id="am" value={anyModel} onChange={(e) => setAnyModel(e.target.value)} placeholder="e.g. seedream-v4-text-to-image" className={field} /></div>
                     <div className="grid gap-2"><label className={labelCls} htmlFor="ap">Prompt</label><textarea id="ap" value={anyPrompt} onChange={(e) => setAnyPrompt(e.target.value)} placeholder="Prompt for the model" className={`${field} min-h-20 py-2`} /></div>
-                    <button type="button" onClick={runAnyModel} disabled={busy} className={`${btn} bg-[#7f8ba3] text-[#e9ecf3] hover:bg-[#9aa6bd]`}>Run model</button>
+                    <button type="button" onClick={runAnyModel} disabled={busy} className={`${btn} bg-[#8a5cff] text-[#fbf4e6] hover:bg-[#9d75ff]`}>Run model</button>
                   </div>
                   <div className="grid gap-2">
                     <label className={labelCls} htmlFor="aj">Raw JSON params (optional)</label>
                     <textarea id="aj" value={anyParams} onChange={(e) => setAnyParams(e.target.value)} placeholder={'{\n  "image_size": "1024x1024",\n  "input_urls": ["https://..."]\n}'} className={`${field} min-h-32 py-2 font-mono`} />
-                    <p className="text-[11px] text-[#7c8499]">Merged into the model&apos;s input. Use the exact param names from that model&apos;s doc page.</p>
+                    <p className="text-[11px] text-[#6b6480]">Merged into the model&apos;s input. Use the exact param names from that model&apos;s doc page.</p>
                   </div>
                 </div>
               </section>
@@ -524,11 +523,11 @@ export const AppShell = () => {
           {/* FIGHT */}
           {tab === "fight" ? (
             <div className="grid gap-5 xl:grid-cols-12">
-              <section className={`${panel} border-t-4 border-t-[#7f8ba3] p-6 xl:col-span-12`}>
+              <section className={`${panel} border-t-4 border-t-[#2ec4b6] p-6 xl:col-span-12`}>
                 <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Hero Fight League builder</h2>
-                <p className="mt-1 text-xs text-[#7c8499]">Pick two saved heroes. Heroframe builds intros + a 6-shot fight, keeping both consistent.</p>
+                <p className="mt-1 text-xs text-[#6b6480]">Pick two saved heroes. Heroframe builds intros + a 6-shot fight, keeping both consistent.</p>
                 {characters.length < 2 ? (
-                  <p className="mt-4 text-sm text-[#7c8499]">Create at least two heroes in Cast first.</p>
+                  <p className="mt-4 text-sm text-[#6b6480]">Create at least two heroes in Cast first.</p>
                 ) : (
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
                     <div className="grid gap-2"><label className={labelCls} htmlFor="fa">Fighter A</label>
@@ -541,7 +540,7 @@ export const AppShell = () => {
                   </div>
                 )}
                 <div className="mt-4">
-                  <button type="button" onClick={generateFight} disabled={busy || !fighterA || !fighterB} className={`${btn} bg-[#7f8ba3] text-[#05040a] hover:bg-[#9aa6bd]`}>Build the fight</button>
+                  <button type="button" onClick={generateFight} disabled={busy || !fighterA || !fighterB} className={`${btn} bg-[#2ec4b6] text-[#05040a] hover:bg-[#43d6c8]`}>Build the fight</button>
                 </div>
               </section>
             </div>
@@ -549,19 +548,19 @@ export const AppShell = () => {
 
           {/* FRAMES */}
           {tab === "frames" ? (
-            <section className={`${panel} border-t-4 border-t-[#e8a832] p-6`}>
+            <section className={`${panel} border-t-4 border-t-[#ffd23f] p-6`}>
               <div className="flex items-center justify-between gap-3">
                 <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Frames & clips ({frames.length})</h2>
-                {frames.length > 0 ? <button type="button" onClick={clearFrames} className="rounded-full border border-[#272b38] px-3 py-1 text-[11px] font-bold uppercase text-[#98a1b5] hover:text-[#e9ecf3]">Clear</button> : null}
+                {frames.length > 0 ? <button type="button" onClick={clearFrames} className="rounded-full border border-[#2e2640] px-3 py-1 text-[11px] font-bold uppercase text-[#b3a7c4] hover:text-[#fbf4e6]">Clear</button> : null}
               </div>
               {frames.length === 0 ? (
-                <div className="mt-4 flex min-h-64 items-center justify-center rounded-xl border border-dashed border-[#272b38] bg-[#0c0d13] text-center">
-                  <p className="px-6 text-sm text-[#7c8499]">Generate a scene or a fight, then animate any frame here.</p>
+                <div className="mt-4 flex min-h-64 items-center justify-center rounded-xl border border-dashed border-[#2e2640] bg-[#0c0a12] text-center">
+                  <p className="px-6 text-sm text-[#6b6480]">Generate a scene or a fight, then animate any frame here.</p>
                 </div>
               ) : (
                 <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
                   {frames.map((frame) => (
-                    <figure key={frame.id} className="overflow-hidden rounded-xl border border-[#272b38] bg-[#0c0d13]">
+                    <figure key={frame.id} className="overflow-hidden rounded-xl border border-[#2e2640] bg-[#0c0a12]">
                       {frame.type === "video" ? (
                         <video src={frame.url} controls className="aspect-square w-full bg-black object-contain" />
                       ) : (
@@ -570,14 +569,14 @@ export const AppShell = () => {
                       )}
                       <figcaption className="flex items-center justify-between gap-2 p-3">
                         <div className="flex min-w-0 flex-col">
-                          {frame.shot ? <span className="truncate text-[11px] font-bold text-[#e9ecf3]">{frame.shot}</span> : null}
-                          {frame.characterName ? <span className="truncate text-[10px] uppercase text-[#7f8ba3]">{frame.characterName}</span> : null}
+                          {frame.shot ? <span className="truncate text-[11px] font-bold text-[#fbf4e6]">{frame.shot}</span> : null}
+                          {frame.characterName ? <span className="truncate text-[10px] uppercase text-[#8a5cff]">{frame.characterName}</span> : null}
                         </div>
                         <div className="flex flex-none gap-2">
                           {frame.type === "image" ? (
-                            <button type="button" onClick={() => animateFrame(frame)} disabled={busy} className="rounded-lg bg-[#e8a832] px-2 py-1 text-[11px] font-bold text-[#e9ecf3] disabled:opacity-40">Animate</button>
+                            <button type="button" onClick={() => animateFrame(frame)} disabled={busy} className="rounded-lg bg-[#ff5a3c] px-2 py-1 text-[11px] font-bold text-[#fbf4e6] disabled:opacity-40">Animate</button>
                           ) : null}
-                          <a href={frame.url} target="_blank" rel="noopener noreferrer" className="text-[11px] font-bold text-[#7f8ba3] hover:underline">Open</a>
+                          <a href={frame.url} target="_blank" rel="noopener noreferrer" className="text-[11px] font-bold text-[#2ec4b6] hover:underline">Open</a>
                         </div>
                       </figcaption>
                     </figure>
