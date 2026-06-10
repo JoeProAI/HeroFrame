@@ -12,7 +12,7 @@ type Status = "idle" | "loading" | "success" | "error";
 type Speed = "fast" | "balanced" | "quality";
 type Tab = "cast" | "scenes" | "fight" | "frames";
 
-const panel = "rounded-2xl border border-[#2e2640] bg-[#181320]/55 backdrop-blur-sm";
+const panel = "rounded-2xl border border-[#2e2640] bg-[#181320]/70 backdrop-blur-sm";
 const labelCls = "text-[11px] font-bold uppercase tracking-[0.16em] text-[#b3a7c4]";
 const field =
   "min-h-11 w-full rounded-xl border border-[#2e2640] bg-[#0c0a12] px-3 text-sm text-[#fbf4e6] placeholder:text-[#6b6480] outline-none transition focus-visible:border-[#ffd23f] focus-visible:ring-1 focus-visible:ring-[#ffd23f]";
@@ -440,8 +440,8 @@ export const AppShell = () => {
                 <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Cast ({characters.length})</h2>
                 {characters.length === 0 ? (
                   <div className="mt-4">
-                    <p className="text-sm text-[#6b6480]">No heroes yet. Here are some cartoon styles to spark ideas — create your own on the left.</p>
-                    <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    <p className="text-sm text-[#6b6480]">No heroes yet. Create one on the left.</p>
+                    <div className="hidden">
                       {["bg-hero", "bg-manga", "bg-chibi", "bg-mecha", "bg-noir"].map((name) => (
                         <figure key={name} className="overflow-hidden rounded-xl border border-[#2e2640] bg-[#0c0a12]">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
