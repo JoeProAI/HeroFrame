@@ -20,14 +20,14 @@ body::before {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: 0;
+  z-index: -1;
   pointer-events: none;
   opacity: 0.05;
   background-image: radial-gradient(#fbf4e6 1px, transparent 1.3px);
   background-size: 18px 18px;
 }
 
-body > * {
+body > .__disabled_layer_hack {
   position: relative;
   z-index: 1;
 }
