@@ -3,12 +3,12 @@
 // instead of pasted assets. Sits at z-0; app content renders above at z-1 and
 // panels are translucent so this shows through.
 const tiles = [
-  { src: "/bg/bg-hero.png", className: "left-[-4%] top-[-2%] h-[30rem] w-[30rem] -rotate-6" },
-  { src: "/bg/bg-manga.png", className: "right-[-5%] top-[2%] h-[34rem] w-[34rem] rotate-6" },
-  { src: "/bg/bg-chibi.png", className: "left-[20%] top-[32%] h-[32rem] w-[32rem] rotate-3" },
-  { src: "/bg/bg-mecha.png", className: "right-[12%] top-[38%] h-[32rem] w-[32rem] -rotate-3" },
-  { src: "/bg/bg-noir.png", className: "left-[-3%] bottom-[-6%] h-[30rem] w-[30rem] rotate-2" },
-  { src: "/bg/bg-hero.png", className: "right-[-4%] bottom-[-8%] h-[30rem] w-[30rem] -rotate-2" },
+  { src: "/bg/bg-hero.webp", className: "left-[-4%] top-[-2%] h-[30rem] w-[30rem] -rotate-6" },
+  { src: "/bg/bg-manga.webp", className: "right-[-5%] top-[2%] h-[34rem] w-[34rem] rotate-6" },
+  { src: "/bg/bg-chibi.webp", className: "left-[20%] top-[32%] h-[32rem] w-[32rem] rotate-3" },
+  { src: "/bg/bg-mecha.webp", className: "right-[12%] top-[38%] h-[32rem] w-[32rem] -rotate-3" },
+  { src: "/bg/bg-noir.webp", className: "left-[-3%] bottom-[-6%] h-[30rem] w-[30rem] rotate-2" },
+  { src: "/bg/bg-hero.webp", className: "right-[-4%] bottom-[-8%] h-[30rem] w-[30rem] -rotate-2" },
 ];
 
 export const BackgroundArt = () => (
