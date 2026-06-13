@@ -28,4 +28,7 @@ export const convexFunctions = {
     log: makeFunctionReference<"mutation">("generations:log"),
     clear: makeFunctionReference<"mutation">("generations:clear"),
   },
+  storage: {
+    persistFromUrl: makeFunctionReference<"action">("storage:persistFromUrl"),
+  },
 };

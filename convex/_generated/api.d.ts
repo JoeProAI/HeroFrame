@@ -12,6 +12,7 @@ import type * as characters from "../characters.js";
 import type * as generations from "../generations.js";
 import type * as projects from "../projects.js";
 import type * as runs from "../runs.js";
+import type * as storage from "../storage.js";
 import type * as workflows from "../workflows.js";
 
 import type {
@@ -25,6 +26,7 @@ declare const fullApi: ApiFromModules<{
   generations: typeof generations;
   projects: typeof projects;
   runs: typeof runs;
+  storage: typeof storage;
   workflows: typeof workflows;
 }>;
 
