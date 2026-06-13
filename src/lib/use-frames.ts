@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { hfFetch } from "@/lib/hf-client";
 
 export type Frame = {
   id: string;
@@ -43,7 +44,7 @@ export const useFrames = () => {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch("/api/generations");
+      const res = await hfFetch("/api/generations");
       const payload = (await res.json().catch(() => null)) as { ok?: boolean; generations?: Generation[] } | null;
       if (res.ok && payload?.ok) setHistory(payload.generations ?? []);
     } catch {
@@ -60,7 +61,7 @@ export const useFrames = () => {
   const logGeneration = useCallback(
     async (input: LogInput) => {
       try {
-        await fetch("/api/generations", {
+        await hfFetch("/api/generations", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(input),
@@ -90,7 +91,7 @@ export const useFrames = () => {
   );
 
   const clearFrames = useCallback(async () => {
-    await fetch("/api/generations", { method: "DELETE" }).catch(() => {});
+    await hfFetch("/api/generations", { method: "DELETE" }).catch(() => {});
     await refresh();
   }, [refresh]);
 

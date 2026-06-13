@@ -30,5 +30,6 @@ export const convexFunctions = {
   },
   storage: {
     persistFromUrl: makeFunctionReference<"action">("storage:persistFromUrl"),
+    persistBase64: makeFunctionReference<"action">("storage:persistBase64"),
   },
 };

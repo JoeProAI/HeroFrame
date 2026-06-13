@@ -1,4 +1,4 @@
-import { getKieEnv } from "@/lib/kie/env";
+import { getKieConfig } from "@/lib/kie/env";
 
 const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 const MAX_RETRIES = 3;
@@ -47,11 +47,13 @@ const authHeaders = (apiKey: string): HeadersInit => ({
 });
 
 export const createKieTask = async (params: {
+  apiKey: string;
   model: string;
   input: Record<string, unknown>;
   callBackUrl?: string;
 }): Promise<string> => {
-  const { apiKey, baseUrl } = getKieEnv();
+  const { apiKey } = params;
+  const { baseUrl } = getKieConfig();
   const response = await fetchWithRetry(`${baseUrl}/api/v1/jobs/createTask`, {
     method: "POST",
     headers: authHeaders(apiKey),
@@ -93,8 +95,8 @@ const extractResultUrls = (resultJson: unknown): string[] => {
   return [];
 };
 
-export const getKieTask = async (taskId: string): Promise<KieTaskRecord> => {
-  const { apiKey, baseUrl } = getKieEnv();
+export const getKieTask = async (taskId: string, apiKey: string): Promise<KieTaskRecord> => {
+  const { baseUrl } = getKieConfig();
   const response = await fetchWithRetry(
     `${baseUrl}/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`,
     { method: "GET", headers: authHeaders(apiKey) },
@@ -129,8 +131,8 @@ export const getKieTask = async (taskId: string): Promise<KieTaskRecord> => {
   };
 };
 
-export const getKieCredits = async (): Promise<number | null> => {
-  const { apiKey, baseUrl } = getKieEnv();
+export const getKieCredits = async (apiKey: string): Promise<number | null> => {
+  const { baseUrl } = getKieConfig();
   const response = await fetchWithRetry(`${baseUrl}/api/v1/chat/credit`, {
     method: "GET",
     headers: authHeaders(apiKey),
@@ -147,12 +149,12 @@ export const getKieCredits = async (): Promise<number | null> => {
 
 // Bounded server-side wait so fast models can return inline; otherwise the
 // caller falls back to client polling via the task-status route.
-export const waitForKieTask = async (taskId: string, budgetMs = 7_000): Promise<KieTaskRecord> => {
+export const waitForKieTask = async (taskId: string, apiKey: string, budgetMs = 7_000): Promise<KieTaskRecord> => {
   const deadline = Date.now() + budgetMs;
-  let record = await getKieTask(taskId);
+  let record = await getKieTask(taskId, apiKey);
   while (Date.now() < deadline && record.state !== "success" && record.state !== "fail") {
     await sleep(2_000);
-    record = await getKieTask(taskId);
+    record = await getKieTask(taskId, apiKey);
   }
   return record;
 };

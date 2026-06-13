@@ -5,10 +5,12 @@ import { OWNER_ID } from "@/lib/owner";
 
 export const maxDuration = 60;
 
-export const GET = async (): Promise<NextResponse> => {
+const ownerFrom = (request: NextRequest): string => request.headers.get("x-hf-owner")?.trim() || OWNER_ID;
+
+export const GET = async (request: NextRequest): Promise<NextResponse> => {
   try {
     const convex = getConvexClient();
-    const generations = await convex.query(convexFunctions.generations.listByOwner, { ownerId: OWNER_ID });
+    const generations = await convex.query(convexFunctions.generations.listByOwner, { ownerId: ownerFrom(request) });
     return NextResponse.json({ ok: true, generations });
   } catch (error) {
     return NextResponse.json(
@@ -18,10 +20,10 @@ export const GET = async (): Promise<NextResponse> => {
   }
 };
 
-export const DELETE = async (): Promise<NextResponse> => {
+export const DELETE = async (request: NextRequest): Promise<NextResponse> => {
   try {
     const convex = getConvexClient();
-    await convex.mutation(convexFunctions.generations.clear, { ownerId: OWNER_ID });
+    await convex.mutation(convexFunctions.generations.clear, { ownerId: ownerFrom(request) });
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json(
@@ -52,7 +54,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     }
 
     const id = await convex.mutation(convexFunctions.generations.log, {
-      ownerId: OWNER_ID,
+      ownerId: ownerFrom(request),
       kind: body.kind,
       status: body.status,
       prompt: body.prompt,

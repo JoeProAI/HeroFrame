@@ -7,6 +7,7 @@ import { useStylePresets } from "@/lib/use-style-presets";
 import { useFrames, type Frame } from "@/lib/use-frames";
 import { buildFightShots, expandShots } from "@/lib/shots";
 import { modelCatalog, defaultModel } from "@/lib/kie/models";
+import { hfFetch, getKieKey, setKieKey } from "@/lib/hf-client";
 
 type Status = "idle" | "loading" | "success" | "error";
 type Speed = "fast" | "balanced" | "quality";
@@ -42,6 +43,8 @@ export const AppShell = () => {
   const [speed, setSpeed] = useState<Speed>("balanced");
   const [credits, setCredits] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [kieKeyInput, setKieKeyInput] = useState("");
+  const [hasKey, setHasKey] = useState(false);
 
   // Model selection per mode
   const [imageModel, setImageModel] = useState<string>(defaultModel.image);
@@ -78,7 +81,7 @@ export const AppShell = () => {
 
   const refreshCredits = async () => {
     try {
-      const response = await fetch("/api/kie/credits");
+      const response = await hfFetch("/api/kie/credits");
       const payload = (await response.json().catch(() => null)) as { ok?: boolean; credits?: number | null } | null;
       if (response.ok && payload?.ok) setCredits(payload.credits ?? null);
     } catch {
@@ -87,9 +90,20 @@ export const AppShell = () => {
   };
 
   useEffect(() => {
+    const existing = getKieKey();
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHasKey(existing.length > 0);
+    setKieKeyInput(existing);
     void refreshCredits();
   }, []);
+
+  const saveKey = async () => {
+    setKieKey(kieKeyInput);
+    setHasKey(kieKeyInput.trim().length > 0);
+    setStatus("success");
+    setMessage(kieKeyInput.trim() ? "Kie key saved in your browser." : "Kie key cleared.");
+    await refreshCredits();
+  };
 
   // ---- Upload your own reference -----------------------------------------
   const uploadReference = async (file: File) => {
@@ -108,7 +122,7 @@ export const AppShell = () => {
         reader.onerror = () => reject(new Error("Could not read file."));
         reader.readAsDataURL(file);
       });
-      const response = await fetch("/api/kie/upload", {
+      const response = await hfFetch("/api/kie/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ base64Data: dataUrl, fileName: file.name }),
@@ -365,6 +379,21 @@ export const AppShell = () => {
           <button type="button" onClick={refreshCredits} className="mt-2 w-full rounded-lg border border-[#2e2640] px-2 py-1 text-left text-[11px] text-[#b3a7c4] transition hover:text-[#fbf4e6]">
             Kie credits: <span className="font-bold text-[#ffd23f]">{credits === null ? "—" : credits}</span>
           </button>
+
+          <div className="mt-3 border-t border-[#2e2640] pt-3">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#6b6480]">Your Kie API key</p>
+            <input
+              type="password"
+              value={kieKeyInput}
+              onChange={(e) => setKieKeyInput(e.target.value)}
+              placeholder="paste your kie.ai key"
+              className="mt-2 min-h-9 w-full rounded-lg border border-[#2e2640] bg-[#0c0a12] px-2 text-[11px] text-[#fbf4e6] outline-none focus-visible:border-[#ffd23f]"
+            />
+            <button type="button" onClick={saveKey} className="mt-2 w-full rounded-lg bg-[#ffd23f] px-2 py-1.5 text-[11px] font-bold text-[#05040a] hover:bg-[#ffdd66]">
+              {hasKey ? "Update key" : "Save key"}
+            </button>
+            <p className="mt-1 text-[10px] leading-3 text-[#6b6480]">Stored only in your browser. Get one at kie.ai/api-key.</p>
+          </div>
         </div>
       </aside>
 

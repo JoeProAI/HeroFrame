@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getKieTask } from "@/lib/kie/client";
+import { resolveKieKey } from "@/lib/kie/env";
 
 export const GET = async (request: NextRequest): Promise<NextResponse> => {
   const taskId = request.nextUrl.searchParams.get("taskId");
@@ -7,8 +8,15 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
     return NextResponse.json({ error: "taskId is required." }, { status: 400 });
   }
 
+  let apiKey: string;
   try {
-    const record = await getKieTask(taskId);
+    apiKey = resolveKieKey(request.headers.get("x-kie-key"));
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "No Kie API key." }, { status: 401 });
+  }
+
+  try {
+    const record = await getKieTask(taskId, apiKey);
     return NextResponse.json({
       ok: true,
       taskId: record.taskId,

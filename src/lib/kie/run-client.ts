@@ -1,3 +1,5 @@
+import { hfFetch } from "@/lib/hf-client";
+
 // Client-side helper: kicks off a Kie generation through our own API routes
 // and resolves once the frame is ready (or throws on failure/timeout).
 
@@ -33,7 +35,7 @@ type TaskResponse = {
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const runKieGeneration = async (params: RunKieParams): Promise<string> => {
-  const response = await fetch("/api/kie/generate", {
+  const response = await hfFetch("/api/kie/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -63,7 +65,7 @@ export const runKieGeneration = async (params: RunKieParams): Promise<string> =>
   while (Date.now() < deadline) {
     await sleep(3_000);
     try {
-      const taskResponse = await fetch(`/api/kie/task?taskId=${encodeURIComponent(taskId)}`);
+      const taskResponse = await hfFetch(`/api/kie/task?taskId=${encodeURIComponent(taskId)}`);
       const task = (await taskResponse.json().catch(() => null)) as TaskResponse | null;
       if (!taskResponse.ok || !task?.ok) continue;
       if (task.state === "success") {

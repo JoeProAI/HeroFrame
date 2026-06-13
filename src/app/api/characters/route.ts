@@ -3,12 +3,14 @@ import { getConvexClient } from "@/lib/convex";
 import { convexFunctions } from "@/lib/convex-functions";
 import { OWNER_ID } from "@/lib/owner";
 
+const ownerFrom = (request: NextRequest): string => request.headers.get("x-hf-owner")?.trim() || OWNER_ID;
+
 export const GET = async (request: NextRequest): Promise<NextResponse> => {
   const scope = request.nextUrl.searchParams.get("scope") ?? "active";
   try {
     const convex = getConvexClient();
     const fn = scope === "deleted" ? convexFunctions.characters.listDeleted : convexFunctions.characters.list;
-    const characters = await convex.query(fn, { ownerId: OWNER_ID });
+    const characters = await convex.query(fn, { ownerId: ownerFrom(request) });
     return NextResponse.json({ ok: true, characters });
   } catch (error) {
     return NextResponse.json(
@@ -28,7 +30,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
   try {
     const convex = getConvexClient();
     const id = await convex.mutation(convexFunctions.characters.create, {
-      ownerId: OWNER_ID,
+      ownerId: ownerFrom(request),
       name: body.name.trim(),
       referenceUrl: body.referenceUrl.trim(),
       notes: body.notes?.trim() || undefined,

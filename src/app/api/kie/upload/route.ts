@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getKieEnv } from "@/lib/kie/env";
-
-const UPLOAD_URL = "https://kieai.redpandaai.co/api/file-base64-upload";
+import { getConvexClient } from "@/lib/convex";
+import { convexFunctions } from "@/lib/convex-functions";
 
 export const maxDuration = 60;
 
+// Uploads a user's reference image straight into Convex storage and returns a
+// permanent URL. No third-party key required.
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
-  let body: { base64Data?: string; fileName?: string };
+  let body: { base64Data?: string };
   try {
-    body = (await request.json()) as { base64Data?: string; fileName?: string };
+    body = (await request.json()) as { base64Data?: string };
   } catch {
     return NextResponse.json({ error: "Invalid JSON payload." }, { status: 400 });
   }
@@ -16,32 +17,12 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     return NextResponse.json({ error: "base64Data is required." }, { status: 400 });
   }
 
-  let apiKey: string;
   try {
-    apiKey = getKieEnv().apiKey;
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Kie not configured." },
-      { status: 500 },
-    );
-  }
-
-  try {
-    const response = await fetch(UPLOAD_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        base64Data: body.base64Data,
-        uploadPath: "images/heroframe",
-        fileName: body.fileName || `ref-${Date.now()}.png`,
-      }),
-    });
-    const text = await response.text();
-    const parsed = text ? (JSON.parse(text) as { data?: { downloadUrl?: string }; msg?: string }) : null;
-    const url = parsed?.data?.downloadUrl;
-    if (!response.ok || !url) {
-      throw new Error(parsed?.msg ?? `Upload failed (HTTP ${response.status}).`);
-    }
+    const convex = getConvexClient();
+    const url = (await convex.action(convexFunctions.storage.persistBase64, {
+      base64: body.base64Data,
+    })) as string | null;
+    if (!url) throw new Error("Storage returned no URL.");
     return NextResponse.json({ ok: true, url });
   } catch (error) {
     return NextResponse.json(

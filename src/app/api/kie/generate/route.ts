@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createKieTask, waitForKieTask } from "@/lib/kie/client";
-import { getKieEnv } from "@/lib/kie/env";
+import { getKieConfig, resolveKieKey } from "@/lib/kie/env";
 import { resolveKieModel, type KieMode, type KieSpeed } from "@/lib/kie/models";
 
 export const maxDuration = 60;
@@ -62,22 +62,24 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     }
   }
 
-  let callBackUrl: string | undefined;
+  let apiKey: string;
   try {
-    const env = getKieEnv();
-    callBackUrl = env.callbackBaseUrl
-      ? `${env.callbackBaseUrl.replace(/\/$/, "")}/api/kie/callback`
-      : undefined;
+    apiKey = resolveKieKey(request.headers.get("x-kie-key"));
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Kie is not configured." },
-      { status: 500 },
+      { error: error instanceof Error ? error.message : "No Kie API key." },
+      { status: 401 },
     );
   }
 
+  const config = getKieConfig();
+  const callBackUrl = config.callbackBaseUrl
+    ? `${config.callbackBaseUrl.replace(/\/$/, "")}/api/kie/callback`
+    : undefined;
+
   try {
-    const taskId = await createKieTask({ model, input, callBackUrl });
-    const record = await waitForKieTask(taskId);
+    const taskId = await createKieTask({ apiKey, model, input, callBackUrl });
+    const record = await waitForKieTask(taskId, apiKey);
     return NextResponse.json({
       ok: true,
       model,

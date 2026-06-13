@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { hfFetch } from "@/lib/hf-client";
 
 export type Character = {
   id: string;
@@ -26,7 +27,7 @@ export const useCharacters = () => {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch("/api/characters?scope=active");
+      const res = await hfFetch("/api/characters?scope=active");
       const payload = (await res.json().catch(() => null)) as { ok?: boolean; characters?: ConvexCharacter[] } | null;
       if (res.ok && payload?.ok) {
         const list = normalize(payload.characters ?? []);
@@ -40,7 +41,7 @@ export const useCharacters = () => {
 
   const loadDeleted = useCallback(async () => {
     try {
-      const res = await fetch("/api/characters?scope=deleted");
+      const res = await hfFetch("/api/characters?scope=deleted");
       const payload = (await res.json().catch(() => null)) as { ok?: boolean; characters?: ConvexCharacter[] } | null;
       if (res.ok && payload?.ok) setDeleted(normalize(payload.characters ?? []));
     } catch {
@@ -55,7 +56,7 @@ export const useCharacters = () => {
 
   const addCharacter = useCallback(
     async (name: string, referenceUrl: string, notes?: string) => {
-      const res = await fetch("/api/characters", {
+      const res = await hfFetch("/api/characters", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, referenceUrl, notes }),
@@ -70,7 +71,7 @@ export const useCharacters = () => {
 
   const mutate = useCallback(
     async (id: string, action: "delete" | "restore" | "purge") => {
-      await fetch("/api/characters", {
+      await hfFetch("/api/characters", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, action }),
