@@ -22,7 +22,7 @@ const btn =
 const tabs: { id: Tab; label: string; dot: string }[] = [
   { id: "cast", label: "Cast", dot: "#8a5cff" },
   { id: "scenes", label: "Scenes", dot: "#ff5a3c" },
-  { id: "fight", label: "Fight League", dot: "#2ec4b6" },
+  { id: "fight", label: "Versus", dot: "#2ec4b6" },
   { id: "frames", label: "Frames", dot: "#ffd23f" },
 ];
 
@@ -534,7 +534,7 @@ export const AppShell = () => {
           {tab === "fight" ? (
             <div className="grid gap-5 xl:grid-cols-12">
               <section className={`${panel} border-t-4 border-t-[#2ec4b6] p-6 xl:col-span-12`}>
-                <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Hero Fight League builder</h2>
+                <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Versus Builder</h2>
                 <p className="mt-1 text-xs text-[#6b6480]">Pick two saved heroes. Heroframe builds intros + a 6-shot fight, keeping both consistent.</p>
                 {characters.length < 2 ? (
                   <p className="mt-4 text-sm text-[#6b6480]">Create at least two heroes in Cast first.</p>

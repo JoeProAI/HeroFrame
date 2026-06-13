@@ -24,7 +24,7 @@ export const expandShots = (beat: string, count: number): { label: string; promp
   }));
 };
 
-// Hero Fight League sequence built from two named fighters.
+// Versus sequence built from two named fighters.
 export const buildFightShots = (
   fighterA: string,
   fighterB: string,

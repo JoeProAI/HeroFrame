@@ -39,6 +39,37 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_project", ["projectId"]),
 
+  characters: defineTable({
+    ownerId: v.string(),
+    name: v.string(),
+    referenceUrl: v.string(),
+    notes: v.optional(v.string()),
+    deletedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_owner", ["ownerId"]),
+
+  generations: defineTable({
+    ownerId: v.string(),
+    kind: v.union(
+      v.literal("reference"),
+      v.literal("scene"),
+      v.literal("variation"),
+      v.literal("fight"),
+      v.literal("video"),
+      v.literal("adhoc"),
+    ),
+    status: v.union(v.literal("succeeded"), v.literal("failed")),
+    prompt: v.string(),
+    model: v.optional(v.string()),
+    url: v.optional(v.string()),
+    type: v.optional(v.union(v.literal("image"), v.literal("video"))),
+    characterName: v.optional(v.string()),
+    shot: v.optional(v.string()),
+    error: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_owner", ["ownerId"]),
+
   runs: defineTable({
     projectId: v.id("projects"),
     workflowId: v.id("workflows"),

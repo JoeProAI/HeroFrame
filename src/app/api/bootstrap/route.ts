@@ -7,7 +7,7 @@ import { toSlug } from "@/lib/slug";
 export const POST = async (): Promise<NextResponse> => {
   const convexClient = getConvexClient();
   const ownerId = "local-dev-owner";
-  const projectName = "Cartoon Hero Course";
+  const projectName = "HeroFrame Studio";
   const slug = toSlug(projectName);
 
   const projectId = await convexClient.mutation(convexFunctions.projects.upsert, {
@@ -15,7 +15,7 @@ export const POST = async (): Promise<NextResponse> => {
     name: projectName,
     slug,
     status: "active",
-    description: "Main orchestration workspace for Cartoon Hero workflows.",
+    description: "Main orchestration workspace for HeroFrame production workflows.",
   });
 
   const heroWorkflowId = await convexClient.mutation(convexFunctions.workflows.upsert, {

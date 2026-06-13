@@ -1,7 +1,7 @@
 import type { WorkflowTemplate } from "@/types/workflow";
 
 export const heroFightLeagueTemplate: WorkflowTemplate = {
-  name: "Hero Fight League v1",
+  name: "Versus Builder v1",
   key: "hero-fight-league",
   version: 1,
   steps: [
