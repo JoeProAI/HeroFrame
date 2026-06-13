@@ -138,7 +138,8 @@ HeroFrame was inspired by the **Cartoon Hero** course and its community — the
 ideas and craft taught there sparked this independent tool. Full respect and
 credit to the creators.
 
-- Course / creators: <!-- TODO: add the creator/group name + link, e.g. https://... -->
+- Cartoon Hero World community: https://www.skool.com/cartoon-hero-world
+- EasyGens: https://easygens.com/
 
 **Disclaimer:** HeroFrame is an independent, unaffiliated project. It does not
 include, redistribute, or resell any course materials (prompts, source images,

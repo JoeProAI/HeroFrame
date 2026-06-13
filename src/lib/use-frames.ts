@@ -12,45 +12,100 @@ export type Frame = {
   createdAt: number;
 };
 
-const STORAGE_KEY = "heroframe.frames.v1";
+export type Generation = {
+  _id: string;
+  kind: string;
+  status: "succeeded" | "failed";
+  prompt: string;
+  model?: string;
+  url?: string;
+  type?: "image" | "video";
+  characterName?: string;
+  shot?: string;
+  error?: string;
+  createdAt: number;
+};
 
-const read = (): Frame[] => {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? (parsed as Frame[]) : [];
-  } catch {
-    return [];
-  }
+type LogInput = {
+  kind: "reference" | "scene" | "variation" | "fight" | "video" | "adhoc";
+  status: "succeeded" | "failed";
+  prompt: string;
+  model?: string;
+  url?: string;
+  type?: "image" | "video";
+  characterName?: string;
+  shot?: string;
+  error?: string;
 };
 
 export const useFrames = () => {
-  const [frames, setFrames] = useState<Frame[]>([]);
-  const [hydrated, setHydrated] = useState(false);
+  const [history, setHistory] = useState<Generation[]>([]);
 
-  useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect */
-    setFrames(read());
-    setHydrated(true);
-    /* eslint-enable react-hooks/set-state-in-effect */
-  }, []);
-
-  useEffect(() => {
-    if (hydrated && typeof window !== "undefined") {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(frames.slice(0, 60)));
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch("/api/generations");
+      const payload = (await res.json().catch(() => null)) as { ok?: boolean; generations?: Generation[] } | null;
+      if (res.ok && payload?.ok) setHistory(payload.generations ?? []);
+    } catch {
+      // non-fatal
     }
-  }, [frames, hydrated]);
-
-  const addFrame = useCallback((frame: Omit<Frame, "id" | "createdAt">) => {
-    setFrames((prev) => [
-      { ...frame, id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, createdAt: Date.now() },
-      ...prev,
-    ]);
   }, []);
 
-  const clearFrames = useCallback(() => setFrames([]), []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refresh();
+  }, [refresh]);
 
-  return { frames, addFrame, clearFrames };
+  // Log any generation (success or failure) to Convex, then refresh.
+  const logGeneration = useCallback(
+    async (input: LogInput) => {
+      try {
+        await fetch("/api/generations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(input),
+        });
+      } catch {
+        // non-fatal
+      }
+      await refresh();
+    },
+    [refresh],
+  );
+
+  // Back-compat helper used by the generators in the UI.
+  const addFrame = useCallback(
+    (frame: { url: string; type: "image" | "video"; prompt: string; characterName?: string; shot?: string; kind?: LogInput["kind"]; model?: string }) =>
+      logGeneration({
+        kind: frame.kind ?? (frame.type === "video" ? "video" : "scene"),
+        status: "succeeded",
+        prompt: frame.prompt,
+        url: frame.url,
+        type: frame.type,
+        characterName: frame.characterName,
+        shot: frame.shot,
+        model: frame.model,
+      }),
+    [logGeneration],
+  );
+
+  const clearFrames = useCallback(async () => {
+    await fetch("/api/generations", { method: "DELETE" }).catch(() => {});
+    await refresh();
+  }, [refresh]);
+
+  // Successful image/video results, newest first, for the Frames gallery.
+  const frames: Frame[] = history
+    .filter((g) => g.status === "succeeded" && g.url)
+    .map((g) => ({
+      id: g._id,
+      url: g.url as string,
+      type: g.type ?? "image",
+      prompt: g.prompt,
+      characterName: g.characterName,
+      shot: g.shot,
+      createdAt: g.createdAt,
+    }));
+
+  return { frames, history, addFrame, logGeneration, clearFrames, refresh };
 };

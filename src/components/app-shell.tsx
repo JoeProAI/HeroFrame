@@ -10,7 +10,7 @@ import { modelCatalog, defaultModel } from "@/lib/kie/models";
 
 type Status = "idle" | "loading" | "success" | "error";
 type Speed = "fast" | "balanced" | "quality";
-type Tab = "cast" | "scenes" | "fight" | "frames";
+type Tab = "cast" | "scenes" | "fight" | "frames" | "history";
 
 const panel = "rounded-2xl border border-[#2e2640] bg-[#181320]/70 backdrop-blur-sm";
 const labelCls = "text-[11px] font-bold uppercase tracking-[0.16em] text-[#b3a7c4]";
@@ -24,6 +24,7 @@ const tabs: { id: Tab; label: string; dot: string }[] = [
   { id: "scenes", label: "Scenes", dot: "#ff5a3c" },
   { id: "fight", label: "Versus", dot: "#2ec4b6" },
   { id: "frames", label: "Frames", dot: "#ffd23f" },
+  { id: "history", label: "History", dot: "#9aa6bd" },
 ];
 
 const speeds: Speed[] = ["fast", "balanced", "quality"];
@@ -31,9 +32,9 @@ const speeds: Speed[] = ["fast", "balanced", "quality"];
 const isVideoUrl = (url: string): boolean => /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url);
 
 export const AppShell = () => {
-  const { characters, activeCharacter, activeId, setActiveId, addCharacter, removeCharacter } = useCharacters();
+  const { characters, deleted, activeCharacter, activeId, setActiveId, addCharacter, removeCharacter, restoreCharacter, purgeCharacter, loadDeleted } = useCharacters();
   const { presets, activePreset, activeId: presetId, setActiveId: setPresetId, addPreset } = useStylePresets();
-  const { frames, addFrame, clearFrames } = useFrames();
+  const { frames, history, addFrame, clearFrames } = useFrames();
 
   const [tab, setTab] = useState<Tab>("cast");
   const [status, setStatus] = useState<Status>("idle");
@@ -116,7 +117,7 @@ export const AppShell = () => {
       if (!response.ok || !payload?.ok || !payload.url) {
         throw new Error(payload?.error ?? "Upload failed.");
       }
-      addCharacter(charName, payload.url);
+      await addCharacter(charName, payload.url);
       setCharName("");
       setStatus("success");
       setMessage("Reference uploaded and character saved.");
@@ -146,7 +147,7 @@ export const AppShell = () => {
         model: imageModel,
         onProgress: (s) => setMessage(`Generating reference... (${s})`),
       });
-      addCharacter(charName, url, charPrompt.trim());
+      await addCharacter(charName, url, charPrompt.trim());
       setCharName("");
       setCharPrompt("");
       setStatus("success");
@@ -157,13 +158,13 @@ export const AppShell = () => {
     }
   };
 
-  const createCharacterFromUrl = () => {
+  const createCharacterFromUrl = async () => {
     if (!charName.trim() || !charUrl.trim()) {
       setStatus("error");
       setMessage("Give the character a name and a reference image URL.");
       return;
     }
-    addCharacter(charName, charUrl.trim());
+    await addCharacter(charName, charUrl.trim());
     setCharName("");
     setCharUrl("");
     setStatus("success");
@@ -467,6 +468,29 @@ export const AppShell = () => {
                     ))}
                   </div>
                 )}
+
+                {/* Recycle bin */}
+                <div className="mt-6 border-t border-[#2e2640] pt-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-bold text-[#fbf4e6]">Recycle bin ({deleted.length})</h3>
+                    <button type="button" onClick={() => loadDeleted()} className="rounded-lg border border-[#2e2640] px-2 py-1 text-[11px] font-bold text-[#b3a7c4] hover:text-[#fbf4e6]">Refresh</button>
+                  </div>
+                  {deleted.length === 0 ? (
+                    <p className="mt-2 text-xs text-[#6b6480]">Deleted heroes show up here and can be restored.</p>
+                  ) : (
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {deleted.map((c) => (
+                        <div key={c.id} className="flex items-center gap-3 rounded-xl border border-[#2e2640] bg-[#0c0a12] p-2">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={c.referenceUrl} alt={c.name} className="h-12 w-12 flex-none rounded-lg border border-[#2e2640] object-cover opacity-70" />
+                          <span className="flex-1 truncate text-sm text-[#b3a7c4]">{c.name}</span>
+                          <button type="button" onClick={() => restoreCharacter(c.id)} className="rounded-lg bg-[#2ec4b6] px-2 py-1 text-[11px] font-bold text-[#05040a]">restore</button>
+                          <button type="button" onClick={() => purgeCharacter(c.id)} className="rounded-lg px-2 py-1 text-[11px] text-[#6b6480] hover:text-[#ff5a3c]">forever</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </section>
             </div>
           ) : null}
@@ -588,6 +612,42 @@ export const AppShell = () => {
                           ) : null}
                           <a href={frame.url} target="_blank" rel="noopener noreferrer" className="text-[11px] font-bold text-[#2ec4b6] hover:underline">Open</a>
                         </div>
+                      </figcaption>
+                    </figure>
+                  ))}
+                </div>
+              )}
+            </section>
+          ) : null}
+
+          {/* HISTORY — every generation, good or bad, from Convex */}
+          {tab === "history" ? (
+            <section className={`${panel} border-t-4 border-t-[#9aa6bd] p-6`}>
+              <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">History ({history.length})</h2>
+              <p className="mt-1 text-xs text-[#6b6480]">Every generation is stored in Convex — successes and failures, across devices.</p>
+              {history.length === 0 ? (
+                <div className="mt-4 flex min-h-48 items-center justify-center rounded-xl border border-dashed border-[#2e2640] bg-[#0c0a12] text-center">
+                  <p className="px-6 text-sm text-[#6b6480]">No generations logged yet.</p>
+                </div>
+              ) : (
+                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {history.map((g) => (
+                    <figure key={g._id} className="overflow-hidden rounded-xl border border-[#2e2640] bg-[#0c0a12]">
+                      {g.status === "succeeded" && g.url ? (
+                        g.type === "video" ? (
+                          <video src={g.url} className="aspect-square w-full bg-black object-contain" />
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={g.url} alt={g.prompt} className="aspect-square w-full object-cover" />
+                        )
+                      ) : (
+                        <div className="flex aspect-square w-full items-center justify-center bg-[#15101a] text-center text-[10px] text-[#ff8c79]">
+                          {g.status === "failed" ? "failed" : "no preview"}
+                        </div>
+                      )}
+                      <figcaption className="flex items-center justify-between gap-2 p-2">
+                        <span className="truncate text-[10px] uppercase text-[#7c8499]">{g.kind}</span>
+                        <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase ${g.status === "succeeded" ? "bg-[#4ade80] text-[#05040a]" : "bg-[#ff5a3c] text-[#fbf4e6]"}`}>{g.status}</span>
                       </figcaption>
                     </figure>
                   ))}

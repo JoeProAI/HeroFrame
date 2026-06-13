@@ -7,66 +7,97 @@ export type Character = {
   name: string;
   referenceUrl: string;
   notes?: string;
-  createdAt: number;
 };
 
-const STORAGE_KEY = "heroframe.characters.v1";
-
-const readStore = (): Character[] => {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? (parsed as Character[]) : [];
-  } catch {
-    return [];
-  }
+type ConvexCharacter = {
+  _id: string;
+  name: string;
+  referenceUrl: string;
+  notes?: string;
 };
 
-const writeStore = (characters: Character[]): void => {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(characters));
-};
+const normalize = (rows: ConvexCharacter[]): Character[] =>
+  rows.map((r) => ({ id: r._id, name: r.name, referenceUrl: r.referenceUrl, notes: r.notes }));
 
 export const useCharacters = () => {
   const [characters, setCharacters] = useState<Character[]>([]);
+  const [deleted, setDeleted] = useState<Character[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [hydrated, setHydrated] = useState(false);
 
-  useEffect(() => {
-    // Hydrate from localStorage after mount to avoid SSR/client mismatch.
-    const stored = readStore();
-    /* eslint-disable react-hooks/set-state-in-effect */
-    setCharacters(stored);
-    setActiveId(stored.at(0)?.id ?? null);
-    setHydrated(true);
-    /* eslint-enable react-hooks/set-state-in-effect */
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch("/api/characters?scope=active");
+      const payload = (await res.json().catch(() => null)) as { ok?: boolean; characters?: ConvexCharacter[] } | null;
+      if (res.ok && payload?.ok) {
+        const list = normalize(payload.characters ?? []);
+        setCharacters(list);
+        setActiveId((cur) => cur ?? list.at(0)?.id ?? null);
+      }
+    } catch {
+      // non-fatal; Convex may be unreachable
+    }
+  }, []);
+
+  const loadDeleted = useCallback(async () => {
+    try {
+      const res = await fetch("/api/characters?scope=deleted");
+      const payload = (await res.json().catch(() => null)) as { ok?: boolean; characters?: ConvexCharacter[] } | null;
+      if (res.ok && payload?.ok) setDeleted(normalize(payload.characters ?? []));
+    } catch {
+      // non-fatal
+    }
   }, []);
 
   useEffect(() => {
-    if (hydrated) writeStore(characters);
-  }, [characters, hydrated]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refresh();
+  }, [refresh]);
 
-  const addCharacter = useCallback((name: string, referenceUrl: string, notes?: string): Character => {
-    const character: Character = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      name: name.trim() || "Untitled hero",
-      referenceUrl,
-      notes: notes?.trim() || undefined,
-      createdAt: Date.now(),
-    };
-    setCharacters((prev) => [character, ...prev]);
-    setActiveId(character.id);
-    return character;
-  }, []);
+  const addCharacter = useCallback(
+    async (name: string, referenceUrl: string, notes?: string) => {
+      const res = await fetch("/api/characters", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, referenceUrl, notes }),
+      });
+      const payload = (await res.json().catch(() => null)) as { ok?: boolean; id?: string; error?: string } | null;
+      if (!res.ok || !payload?.ok) throw new Error(payload?.error ?? "Failed to save character.");
+      await refresh();
+      if (payload.id) setActiveId(payload.id);
+    },
+    [refresh],
+  );
 
-  const removeCharacter = useCallback((id: string) => {
-    setCharacters((prev) => prev.filter((character) => character.id !== id));
-    setActiveId((current) => (current === id ? null : current));
-  }, []);
+  const mutate = useCallback(
+    async (id: string, action: "delete" | "restore" | "purge") => {
+      await fetch("/api/characters", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action }),
+      });
+      await refresh();
+      await loadDeleted();
+    },
+    [refresh, loadDeleted],
+  );
 
-  const activeCharacter = characters.find((character) => character.id === activeId) ?? null;
+  const removeCharacter = useCallback((id: string) => mutate(id, "delete"), [mutate]);
+  const restoreCharacter = useCallback((id: string) => mutate(id, "restore"), [mutate]);
+  const purgeCharacter = useCallback((id: string) => mutate(id, "purge"), [mutate]);
 
-  return { characters, activeCharacter, activeId, setActiveId, addCharacter, removeCharacter, hydrated };
+  const activeCharacter = characters.find((c) => c.id === activeId) ?? null;
+
+  return {
+    characters,
+    deleted,
+    activeCharacter,
+    activeId,
+    setActiveId,
+    addCharacter,
+    removeCharacter,
+    restoreCharacter,
+    purgeCharacter,
+    loadDeleted,
+    refresh,
+  };
 };
