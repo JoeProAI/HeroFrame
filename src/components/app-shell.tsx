@@ -6,12 +6,12 @@ import { useCharacters } from "@/lib/use-characters";
 import { useStylePresets } from "@/lib/use-style-presets";
 import { useFrames, type Frame } from "@/lib/use-frames";
 import { buildFightShots, expandShots } from "@/lib/shots";
-import { modelCatalog, defaultModel } from "@/lib/kie/models";
+import { modelCatalog, defaultModel, pipelineModels, ttsVoices } from "@/lib/kie/models";
 import { hfFetch, getKieKey, setKieKey } from "@/lib/hf-client";
 
 type Status = "idle" | "loading" | "success" | "error";
 type Speed = "fast" | "balanced" | "quality";
-type Tab = "cast" | "scenes" | "fight" | "frames" | "history";
+type Tab = "cast" | "scenes" | "fight" | "lipsync" | "frames" | "history";
 
 const panel = "rounded-2xl border border-[#2e2640] bg-[#181320]/70 backdrop-blur-sm";
 const labelCls = "text-[11px] font-bold uppercase tracking-[0.16em] text-[#b3a7c4]";
@@ -24,6 +24,7 @@ const tabs: { id: Tab; label: string; dot: string }[] = [
   { id: "cast", label: "Cast", dot: "#8a5cff" },
   { id: "scenes", label: "Scenes", dot: "#ff5a3c" },
   { id: "fight", label: "Versus", dot: "#2ec4b6" },
+  { id: "lipsync", label: "Lipsync", dot: "#ff8cc8" },
   { id: "frames", label: "Frames", dot: "#ffd23f" },
   { id: "history", label: "History", dot: "#9aa6bd" },
 ];
@@ -45,6 +46,13 @@ export const AppShell = () => {
   const [uploading, setUploading] = useState(false);
   const [kieKeyInput, setKieKeyInput] = useState("");
   const [hasKey, setHasKey] = useState(false);
+  const [useIdeoChar, setUseIdeoChar] = useState(false);
+
+  // Lipsync pipeline
+  const [lipImageId, setLipImageId] = useState<string>("");
+  const [lipText, setLipText] = useState("");
+  const [lipVoice, setLipVoice] = useState<string>(ttsVoices[0].id);
+  const [lipRes, setLipRes] = useState<"480p" | "720p">("480p");
 
   // Model selection per mode
   const [imageModel, setImageModel] = useState<string>(defaultModel.image);
@@ -186,8 +194,23 @@ export const AppShell = () => {
   };
 
   // ---- Generation helpers -------------------------------------------------
-  const generateImage = async (prompt: string, refs?: string[]) =>
-    runKieGeneration({
+  const generateImage = async (prompt: string, refs?: string[]) => {
+    // Single-character + consistency toggle -> Ideogram Character model, which
+    // is purpose-built for locking a character across shots.
+    if (refs?.length === 1 && useIdeoChar) {
+      return runKieGeneration({
+        prompt: "",
+        model: pipelineModels.characterImage,
+        input: {
+          prompt: styleHint?.trim() ? `${prompt}. Style: ${styleHint.trim()}` : prompt,
+          reference_image_urls: [refs[0]],
+          rendering_speed: speed === "fast" ? "TURBO" : speed === "quality" ? "QUALITY" : "BALANCED",
+          image_size: "square_hd",
+        },
+        onProgress: (s) => setMessage(`Working... (${s})`),
+      });
+    }
+    return runKieGeneration({
       prompt: refs?.length ? `Keep the same character(s) from the reference image(s). ${prompt}` : prompt,
       styleHint,
       speed,
@@ -196,6 +219,7 @@ export const AppShell = () => {
       imageUrls: refs,
       onProgress: (s) => setMessage(`Working... (${s})`),
     });
+  };
 
   // ---- Scenes: multi-shot -------------------------------------------------
   const generateMultiShot = async () => {
@@ -340,6 +364,76 @@ export const AppShell = () => {
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Animation failed.");
+    }
+  };
+
+  // ---- Topaz upscale ------------------------------------------------------
+  const upscaleFrame = async (frame: Frame) => {
+    const isVideo = frame.type === "video";
+    setStatus("loading");
+    setMessage(`Upscaling ${isVideo ? "clip" : "image"} 2x...`);
+    try {
+      const url = await runKieGeneration({
+        prompt: "",
+        model: isVideo ? pipelineModels.videoUpscale : pipelineModels.imageUpscale,
+        input: isVideo
+          ? { video_url: frame.url, upscale_factor: "2" }
+          : { image_url: frame.url, upscale_factor: "2" },
+        onProgress: (s) => setMessage(`Upscaling... (${s})`),
+      });
+      addFrame({ url, type: frame.type, prompt: `Upscaled: ${frame.prompt}`, characterName: frame.characterName, shot: `${frame.shot ?? "frame"} 2x`, kind: "adhoc" });
+      setStatus("success");
+      setMessage("Upscaled 2x.");
+      void refreshCredits();
+    } catch (error) {
+      setStatus("error");
+      setMessage(error instanceof Error ? error.message : "Upscale failed.");
+    }
+  };
+
+  // ---- Lipsync (TTS voice -> talking character) ---------------------------
+  const lipImage = characters.find((c) => c.id === lipImageId) ?? activeCharacter;
+  const runLipsync = async () => {
+    const sourceUrl = lipImage?.referenceUrl;
+    if (!sourceUrl) {
+      setStatus("error");
+      setMessage("Pick a character for the talking head first.");
+      return;
+    }
+    if (!lipText.trim()) {
+      setStatus("error");
+      setMessage("Add the line you want them to say.");
+      return;
+    }
+    setStatus("loading");
+    try {
+      setMessage("Generating voice (ElevenLabs)...");
+      const audioUrl = await runKieGeneration({
+        prompt: "",
+        model: pipelineModels.tts,
+        input: { text: lipText.trim(), voice: lipVoice },
+        onProgress: (s) => setMessage(`Voice... (${s})`),
+      });
+      setMessage("Animating talking character (lipsync)...");
+      const videoUrl = await runKieGeneration({
+        prompt: "",
+        model: pipelineModels.lipsync,
+        input: {
+          image_url: sourceUrl,
+          audio_url: audioUrl,
+          prompt: `${lipImage?.name ?? "A cartoon character"} speaking, expressive and natural lip sync.`,
+          resolution: lipRes,
+        },
+        onProgress: (s) => setMessage(`Lipsync... (${s})`),
+      });
+      addFrame({ url: videoUrl, type: "video", prompt: lipText.trim(), characterName: lipImage?.name, shot: "Lipsync", kind: "video" });
+      setStatus("success");
+      setMessage("Talking clip ready.");
+      setTab("frames");
+      void refreshCredits();
+    } catch (error) {
+      setStatus("error");
+      setMessage(error instanceof Error ? error.message : "Lipsync failed.");
     }
   };
 
@@ -542,7 +636,11 @@ export const AppShell = () => {
                     </div>
                   </div>
                 </div>
-                <div className="mt-4 flex flex-wrap gap-2">
+                <label className="mt-4 flex cursor-pointer items-center gap-2 text-xs text-[#b3a7c4]">
+                  <input type="checkbox" checked={useIdeoChar} onChange={(e) => setUseIdeoChar(e.target.checked)} className="h-3.5 w-3.5 accent-[#8a5cff]" />
+                  Stronger consistency (Ideogram Character) — single active hero only
+                </label>
+                <div className="mt-3 flex flex-wrap gap-2">
                   <button type="button" onClick={generateMultiShot} disabled={busy} className={`${btn} bg-[#ff5a3c] text-[#fbf4e6] hover:bg-[#ff7259]`}>Generate {shotCount} shots</button>
                   <button type="button" onClick={generateVariations} disabled={busy} className={`${btn} border border-[#2e2640] bg-transparent text-[#fbf4e6] hover:bg-[#181320]`}>{variantCount} variations</button>
                 </div>
@@ -609,6 +707,46 @@ export const AppShell = () => {
             </div>
           ) : null}
 
+          {/* LIPSYNC */}
+          {tab === "lipsync" ? (
+            <section className={`${panel} border-t-4 border-t-[#ff8cc8] p-6 xl:max-w-2xl`}>
+              <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">Lipsync</h2>
+              <p className="mt-1 text-xs text-[#6b6480]">Pick a hero, type their line, choose a voice. Makes a talking clip (ElevenLabs voice → Infinitalk lipsync).</p>
+              {characters.length === 0 ? (
+                <p className="mt-4 text-sm text-[#6b6480]">Add a character in the Cast tab first.</p>
+              ) : (
+                <div className="mt-4 grid gap-3">
+                  <div className="grid gap-2">
+                    <label className={labelCls} htmlFor="lipchar">Character</label>
+                    <select id="lipchar" value={lipImageId || activeId || ""} onChange={(e) => setLipImageId(e.target.value)} className={field}>
+                      {characters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="grid gap-2">
+                    <label className={labelCls} htmlFor="liptext">Line to speak</label>
+                    <textarea id="liptext" value={lipText} onChange={(e) => setLipText(e.target.value)} placeholder="What should they say?" maxLength={5000} className={`${field} min-h-24 py-2`} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-2">
+                      <label className={labelCls} htmlFor="lipvoice">Voice</label>
+                      <select id="lipvoice" value={lipVoice} onChange={(e) => setLipVoice(e.target.value)} className={field}>
+                        {ttsVoices.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+                      </select>
+                    </div>
+                    <div className="grid gap-2">
+                      <label className={labelCls} htmlFor="lipres">Resolution</label>
+                      <select id="lipres" value={lipRes} onChange={(e) => setLipRes(e.target.value as "480p" | "720p")} className={field}>
+                        <option value="480p">480p (faster)</option>
+                        <option value="720p">720p</option>
+                      </select>
+                    </div>
+                  </div>
+                  <button type="button" onClick={runLipsync} disabled={busy} className={`${btn} bg-[#ff8cc8] text-[#05040a] hover:bg-[#ffa5d4]`}>Make talking clip</button>
+                </div>
+              )}
+            </section>
+          ) : null}
+
           {/* FRAMES */}
           {tab === "frames" ? (
             <section className={`${panel} border-t-4 border-t-[#ffd23f] p-6`}>
@@ -639,6 +777,7 @@ export const AppShell = () => {
                           {frame.type === "image" ? (
                             <button type="button" onClick={() => animateFrame(frame)} disabled={busy} className="rounded-lg bg-[#ff5a3c] px-2 py-1 text-[11px] font-bold text-[#fbf4e6] disabled:opacity-40">Animate</button>
                           ) : null}
+                          <button type="button" onClick={() => upscaleFrame(frame)} disabled={busy} className="rounded-lg border border-[#2e2640] px-2 py-1 text-[11px] font-bold text-[#b3a7c4] hover:text-[#fbf4e6] disabled:opacity-40">2x</button>
                           <a href={frame.url} target="_blank" rel="noopener noreferrer" className="text-[11px] font-bold text-[#2ec4b6] hover:underline">Open</a>
                         </div>
                       </figcaption>

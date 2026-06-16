@@ -43,6 +43,9 @@ export const modelCatalog: Record<KieMode, ModelOption[]> = {
     { id: "grok-imagine/text-to-image", label: "Grok Imagine" },
     { id: "qwen2/text-to-image", label: "Qwen2" },
     { id: "seedream-v4-text-to-image", label: "Seedream 4" },
+    { id: "ideogram/v3-text-to-image", label: "Ideogram V3" },
+    { id: "flux-2/flex-text-to-image", label: "Flux 2" },
+    { id: "google/imagen4", label: "Imagen 4" },
   ],
   "image-edit": [
     { id: "gpt-image-2-image-to-image", label: "GPT Image-2 (reference)" },
@@ -61,3 +64,25 @@ export const defaultModel: Record<KieMode, string> = {
   "image-edit": "gpt-image-2-image-to-image",
   video: "bytedance/v1-pro-fast-image-to-video",
 };
+
+// Pipeline model ids for the specialized flows (lipsync, consistency, upscale).
+// Verified against the Kie market docs.
+export const pipelineModels = {
+  tts: "elevenlabs/text-to-speech-turbo-2-5",
+  lipsync: "infinitalk/from-audio",
+  characterImage: "ideogram/character",
+  imageUpscale: "topaz/image-upscale",
+  videoUpscale: "topaz/video-upscale",
+} as const;
+
+// Curated subset of ElevenLabs voices (id -> friendly label).
+export const ttsVoices: { id: string; label: string }[] = [
+  { id: "EkK5I93UQWFDigLMpZcX", label: "James — Bold" },
+  { id: "nPczCjzI2devNBz1zQrb", label: "Brian — Deep" },
+  { id: "FGY2WhTYpPnrIDTdsKH5", label: "Laura — Quirky" },
+  { id: "pPdl9cQBQq4p6mRkZy2Z", label: "Emma — Upbeat" },
+  { id: "DGzg6RaUqxGRTHSBjfgF", label: "Brock — Commanding" },
+  { id: "TC0Zp7WVFzhA8zpTlRqV", label: "Aria — Sultry Villain" },
+  { id: "PPzYpIqttlTYA83688JI", label: "Pirate Marshal" },
+  { id: "8JVbfL6oEdmuxKn5DK2C", label: "Johnny — Narrator" },
+];
