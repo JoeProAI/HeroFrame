@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { runKieGeneration } from "@/lib/kie/run-client";
+import { KieGenerationTimeoutError, runKieGeneration } from "@/lib/kie/run-client";
 import { useCharacters } from "@/lib/use-characters";
 import { useStylePresets } from "@/lib/use-style-presets";
 import { useFrames, type Frame } from "@/lib/use-frames";
@@ -12,6 +12,16 @@ import { hfFetch, getKieKey, setKieKey } from "@/lib/hf-client";
 type Status = "idle" | "loading" | "success" | "error";
 type Speed = "fast" | "balanced" | "quality";
 type Tab = "cast" | "scenes" | "fight" | "lipsync" | "frames" | "history";
+type GenerationKind = "reference" | "scene" | "variation" | "fight" | "video" | "adhoc";
+type TaskLookupResponse = {
+  ok?: boolean;
+  error?: string;
+  taskId?: string;
+  model?: string;
+  state?: string;
+  resultUrl?: string;
+  failMsg?: string;
+};
 
 const panel = "rounded-2xl border border-[#2e2640] bg-[#181320]/70 backdrop-blur-sm";
 const labelCls = "text-[11px] font-bold uppercase tracking-[0.16em] text-[#b3a7c4]";
@@ -36,7 +46,7 @@ const isVideoUrl = (url: string): boolean => /\.(mp4|webm|mov|m4v)(\?|$)/i.test(
 export const AppShell = () => {
   const { characters, deleted, activeCharacter, activeId, setActiveId, addCharacter, removeCharacter, restoreCharacter, purgeCharacter, loadDeleted } = useCharacters();
   const { presets, activePreset, activeId: presetId, setActiveId: setPresetId, addPreset } = useStylePresets();
-  const { frames, history, addFrame, clearFrames } = useFrames();
+  const { frames, history, addFrame, logGeneration, clearFrames } = useFrames();
 
   const [tab, setTab] = useState<Tab>("cast");
   const [status, setStatus] = useState<Status>("idle");
@@ -78,6 +88,10 @@ export const AppShell = () => {
   const [anyModel, setAnyModel] = useState("");
   const [anyPrompt, setAnyPrompt] = useState("");
   const [anyParams, setAnyParams] = useState("");
+  const [recoverTaskId, setRecoverTaskId] = useState("");
+  const [recoverPrompt, setRecoverPrompt] = useState("");
+  const [recoverKind, setRecoverKind] = useState<GenerationKind>("adhoc");
+  const [recoverType, setRecoverType] = useState<"image" | "video">("image");
 
   // Fight
   const [fighterAId, setFighterAId] = useState<string>("");
@@ -111,6 +125,69 @@ export const AppShell = () => {
     setStatus("success");
     setMessage(kieKeyInput.trim() ? "Kie key saved in your browser." : "Kie key cleared.");
     await refreshCredits();
+  };
+
+  const failureMessage = (error: unknown): string => (error instanceof Error ? error.message : "Generation failed.");
+
+  const logFailure = async (kind: GenerationKind, prompt: string, error: unknown, model?: string) => {
+    const taskId = error instanceof KieGenerationTimeoutError ? `Task ID: ${error.taskId}` : undefined;
+    await logGeneration({
+      kind,
+      status: "failed",
+      prompt,
+      model: error instanceof KieGenerationTimeoutError ? (error.model ?? model) : model,
+      error: [failureMessage(error), taskId].filter(Boolean).join(" "),
+    });
+  };
+
+  const recoverKieTask = async () => {
+    const taskId = recoverTaskId.trim();
+    if (!taskId) {
+      setStatus("error");
+      setMessage("Paste a Kie task ID first.");
+      return;
+    }
+    setStatus("loading");
+    setMessage(`Checking Kie task ${taskId}...`);
+    try {
+      const response = await hfFetch(`/api/kie/task?taskId=${encodeURIComponent(taskId)}`);
+      const payload = (await response.json().catch(() => null)) as TaskLookupResponse | null;
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error ?? `Task lookup failed (HTTP ${response.status}).`);
+      }
+      if (payload.state === "fail") {
+        const error = payload.failMsg ?? "Recovered task failed.";
+        await logGeneration({
+          kind: recoverKind,
+          status: "failed",
+          prompt: recoverPrompt.trim() || `Recovered Kie task ${taskId}`,
+          model: payload.model,
+          error,
+        });
+        throw new Error(error);
+      }
+      if (payload.state !== "success" || !payload.resultUrl) {
+        setMessage(`Task ${taskId} is ${payload.state ?? "still running"}.`);
+        return;
+      }
+      await addFrame({
+        url: payload.resultUrl,
+        type: recoverType,
+        prompt: recoverPrompt.trim() || `Recovered Kie task ${taskId}`,
+        shot: `Recovered ${taskId}`,
+        kind: recoverKind,
+        model: payload.model,
+      });
+      setRecoverTaskId("");
+      setRecoverPrompt("");
+      setStatus("success");
+      setMessage("Recovered task saved to Frames.");
+      setTab("frames");
+      void refreshCredits();
+    } catch (error) {
+      setStatus("error");
+      setMessage(failureMessage(error));
+    }
   };
 
   // ---- Upload your own reference -----------------------------------------
@@ -175,6 +252,7 @@ export const AppShell = () => {
       setStatus("success");
       setMessage("Reference generated and character saved.");
     } catch (error) {
+      await logFailure("reference", charPrompt.trim(), error, imageModel);
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Reference generation failed.");
     }
@@ -242,6 +320,7 @@ export const AppShell = () => {
       setTab("frames");
       void refreshCredits();
     } catch (error) {
+      await logFailure("scene", storyBeat.trim(), error, activeCharacter ? editModel : imageModel);
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Multi-shot generation failed.");
     }
@@ -268,6 +347,7 @@ export const AppShell = () => {
       setTab("frames");
       void refreshCredits();
     } catch (error) {
+      await logFailure("variation", prompt, error, activeCharacter ? editModel : imageModel);
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Variation generation failed.");
     }
@@ -299,6 +379,7 @@ export const AppShell = () => {
       setTab("frames");
       void refreshCredits();
     } catch (error) {
+      await logFailure("fight", `${fighterA.name} vs ${fighterB.name}${arena.trim() ? ` in ${arena.trim()}` : ""}`, error, editModel);
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Fight generation failed.");
     }
@@ -336,6 +417,7 @@ export const AppShell = () => {
       setTab("frames");
       void refreshCredits();
     } catch (error) {
+      await logFailure("adhoc", anyPrompt.trim(), error, anyModel.trim());
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Generation failed.");
     }
@@ -362,6 +444,7 @@ export const AppShell = () => {
       setTab("frames");
       void refreshCredits();
     } catch (error) {
+      await logFailure("video", frame.prompt, error, videoModel);
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Animation failed.");
     }
@@ -386,6 +469,7 @@ export const AppShell = () => {
       setMessage("Upscaled 2x.");
       void refreshCredits();
     } catch (error) {
+      await logFailure("adhoc", `Upscaled: ${frame.prompt}`, error, isVideo ? pipelineModels.videoUpscale : pipelineModels.imageUpscale);
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Upscale failed.");
     }
@@ -432,6 +516,7 @@ export const AppShell = () => {
       setTab("frames");
       void refreshCredits();
     } catch (error) {
+      await logFailure("video", lipText.trim(), error, pipelineModels.lipsync);
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Lipsync failed.");
     }
@@ -793,6 +878,33 @@ export const AppShell = () => {
             <section className={`${panel} border-t-4 border-t-[#9aa6bd] p-6`}>
               <h2 className="font-[family-name:var(--font-bricolage)] text-xl font-extrabold">History ({history.length})</h2>
               <p className="mt-1 text-xs text-[#6b6480]">Every generation is stored in Convex — successes and failures, across devices.</p>
+              <div className="mt-5 grid gap-3 rounded-xl border border-[#2e2640] bg-[#0c0a12] p-4 lg:grid-cols-[1.2fr_1.2fr_0.7fr_0.7fr_auto]">
+                <div className="grid gap-2">
+                  <label className={labelCls} htmlFor="recover-task">Task ID</label>
+                  <input id="recover-task" value={recoverTaskId} onChange={(e) => setRecoverTaskId(e.target.value)} placeholder="task_xxx" className={field} />
+                </div>
+                <div className="grid gap-2">
+                  <label className={labelCls} htmlFor="recover-prompt">Label</label>
+                  <input id="recover-prompt" value={recoverPrompt} onChange={(e) => setRecoverPrompt(e.target.value)} placeholder="Recovered shot label" className={field} />
+                </div>
+                <div className="grid gap-2">
+                  <label className={labelCls} htmlFor="recover-kind">Kind</label>
+                  <select id="recover-kind" value={recoverKind} onChange={(e) => setRecoverKind(e.target.value as GenerationKind)} className={field}>
+                    {["reference", "scene", "variation", "fight", "video", "adhoc"].map((kind) => <option key={kind} value={kind}>{kind}</option>)}
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <label className={labelCls} htmlFor="recover-type">Type</label>
+                  <select id="recover-type" value={recoverType} onChange={(e) => setRecoverType(e.target.value as "image" | "video")} className={field}>
+                    <option value="image">image</option>
+                    <option value="video">video</option>
+                  </select>
+                </div>
+                <button type="button" onClick={recoverKieTask} disabled={busy || !hasKey} className={`${btn} self-end bg-[#9aa6bd] text-[#05040a] hover:bg-[#b4bed0]`}>Recover</button>
+              </div>
+              <div className="mt-3 flex justify-end">
+                <a href="https://kie.ai/logs" target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-[#2ec4b6] hover:underline">Open Kie logs</a>
+              </div>
               {history.length === 0 ? (
                 <div className="mt-4 flex min-h-48 items-center justify-center rounded-xl border border-dashed border-[#2e2640] bg-[#0c0a12] text-center">
                   <p className="px-6 text-sm text-[#6b6480]">No generations logged yet.</p>

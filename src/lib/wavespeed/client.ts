@@ -66,3 +66,11 @@ export const callWaveSpeed = async ({
   }
   return lastResponse;
 };
+
+export const getWaveSpeedPrediction = async (predictionId: string): Promise<Response> => {
+  const wavespeedEnv = getWaveSpeedEnv();
+  const base = wavespeedEnv.baseUrl.replace(/\/$/, "");
+  const apiBase = base.endsWith("/api/v3") ? base : `${base}/api/v3`;
+  const headers = getWaveSpeedAuthHeaders(wavespeedEnv.apiKey);
+  return await withTimeout(`${apiBase}/predictions/${encodeURIComponent(predictionId)}`, { method: "GET", headers }, 30_000);
+};

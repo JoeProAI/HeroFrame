@@ -20,6 +20,7 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
     return NextResponse.json({
       ok: true,
       taskId: record.taskId,
+      model: record.model,
       state: record.state,
       pending: record.state !== "success" && record.state !== "fail",
       resultUrl: record.resultUrls.at(0) ?? "",

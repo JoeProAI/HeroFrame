@@ -82,17 +82,23 @@ export const createKieTask = async (params: {
   return taskId;
 };
 
+const collectUrls = (value: unknown): string[] => {
+  if (typeof value === "string") return /^https?:\/\//i.test(value) ? [value] : [];
+  if (Array.isArray(value)) return value.flatMap(collectUrls);
+  if (!value || typeof value !== "object") return [];
+  return Object.values(value).flatMap(collectUrls);
+};
+
 const extractResultUrls = (resultJson: unknown): string[] => {
-  if (typeof resultJson !== "string" || !resultJson.trim()) return [];
+  if (!resultJson) return [];
+  if (typeof resultJson !== "string") return Array.from(new Set(collectUrls(resultJson)));
+  if (!resultJson.trim()) return [];
   try {
-    const parsed = JSON.parse(resultJson) as { resultUrls?: unknown };
-    if (Array.isArray(parsed.resultUrls)) {
-      return parsed.resultUrls.filter((url): url is string => typeof url === "string");
-    }
+    const parsed = JSON.parse(resultJson) as unknown;
+    return Array.from(new Set(collectUrls(parsed)));
   } catch {
     return [];
   }
-  return [];
 };
 
 export const getKieTask = async (taskId: string, apiKey: string): Promise<KieTaskRecord> => {
