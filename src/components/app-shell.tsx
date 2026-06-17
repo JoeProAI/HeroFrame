@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { KieGenerationTimeoutError, runKieGeneration } from "@/lib/kie/run-client";
-import { useCharacters } from "@/lib/use-characters";
+import { useCharacters, type Character } from "@/lib/use-characters";
 import { useStylePresets } from "@/lib/use-style-presets";
 import { useFrames, type Frame } from "@/lib/use-frames";
 import { buildFightShots, expandShots } from "@/lib/shots";
@@ -64,6 +64,7 @@ export const AppShell = () => {
   const [importedVoices, setImportedVoices] = useState<ImportedVoice[]>([]);
   const [importingVoices, setImportingVoices] = useState(false);
   const [useIdeoChar, setUseIdeoChar] = useState(false);
+  const [previewCharacter, setPreviewCharacter] = useState<Character | null>(null);
 
   // Lipsync pipeline
   const [lipImageId, setLipImageId] = useState<string>("");
@@ -143,6 +144,15 @@ export const AppShell = () => {
     setElevenLabsKeyInput(existingElevenLabs);
     void refreshCredits();
   }, []);
+
+  useEffect(() => {
+    if (!previewCharacter) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPreviewCharacter(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [previewCharacter]);
 
   const saveKey = async () => {
     setKieKey(kieKeyInput);
@@ -773,10 +783,13 @@ export const AppShell = () => {
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     {characters.map((c) => (
                       <div key={c.id} className={`flex gap-3 rounded-xl border p-3 ${c.id === activeId ? "border-[#8a5cff] bg-[#8a5cff]/10" : "border-[#2e2640] bg-[#0c0a12]"}`}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={c.referenceUrl} alt={c.name} className="h-16 w-16 flex-none rounded-lg border border-[#2e2640] object-cover" />
+                        <button type="button" onClick={() => setPreviewCharacter(c)} className="group relative h-16 w-16 flex-none overflow-hidden rounded-lg border border-[#2e2640] bg-[#05040a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffd23f]" aria-label={`Open ${c.name} reference image`}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={c.referenceUrl} alt={c.name} className="h-full w-full object-cover transition group-hover:scale-105" />
+                          <span className="absolute inset-x-0 bottom-0 bg-[#05040a]/75 py-0.5 text-center text-[9px] font-black uppercase text-[#ffd23f] opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">View</span>
+                        </button>
                         <div className="flex min-w-0 flex-1 flex-col">
-                          <span className="truncate text-sm font-bold text-[#fbf4e6]">{c.name}</span>
+                          <button type="button" onClick={() => setPreviewCharacter(c)} className="truncate text-left text-sm font-bold text-[#fbf4e6] hover:text-[#ffd23f] focus-visible:outline-none focus-visible:text-[#ffd23f]">{c.name}</button>
                           <div className="mt-auto flex gap-2">
                             <button type="button" onClick={() => setActiveId(c.id)} className={`rounded-lg px-2 py-1 text-[11px] font-bold ${c.id === activeId ? "bg-[#8a5cff] text-[#fbf4e6]" : "border border-[#2e2640] text-[#b3a7c4] hover:text-[#fbf4e6]"}`}>{c.id === activeId ? "active" : "use"}</button>
                             <button type="button" onClick={() => removeCharacter(c.id)} className="rounded-lg px-2 py-1 text-[11px] text-[#6b6480] hover:text-[#ff5a3c]">remove</button>
@@ -1075,6 +1088,34 @@ export const AppShell = () => {
           ) : null}
         </div>
       </div>
+      {previewCharacter ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#05040a]/90 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label={`${previewCharacter.name} reference preview`} onClick={() => setPreviewCharacter(null)}>
+          <div className="grid max-h-[92vh] w-full max-w-5xl overflow-hidden rounded-2xl border border-[#2e2640] bg-[#0c0a12] shadow-2xl shadow-black/50 lg:grid-cols-[minmax(0,1fr)_18rem]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex min-h-0 items-center justify-center bg-black">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={previewCharacter.referenceUrl} alt={previewCharacter.name} className="max-h-[72vh] w-full object-contain lg:max-h-[92vh]" />
+            </div>
+            <aside className="flex flex-col gap-4 border-t border-[#2e2640] p-5 lg:border-l lg:border-t-0">
+              <div>
+                <p className={labelCls}>Cast reference</p>
+                <h2 className="mt-2 font-[family-name:var(--font-bricolage)] text-2xl font-black text-[#fbf4e6]">{previewCharacter.name}</h2>
+                {previewCharacter.notes ? <p className="mt-2 text-sm leading-5 text-[#b3a7c4]">{previewCharacter.notes}</p> : null}
+              </div>
+              <div className="mt-auto grid gap-2">
+                <button type="button" onClick={() => { setActiveId(previewCharacter.id); setPreviewCharacter(null); }} className={`${btn} bg-[#8a5cff] text-[#fbf4e6] hover:bg-[#9d75ff]`}>
+                  Use this hero
+                </button>
+                <a href={previewCharacter.referenceUrl} target="_blank" rel="noopener noreferrer" className={`${btn} border border-[#2e2640] text-[#fbf4e6] hover:bg-[#181320]`}>
+                  Open original
+                </a>
+                <button type="button" onClick={() => setPreviewCharacter(null)} className="rounded-xl px-4 py-2 text-sm font-bold text-[#b3a7c4] hover:text-[#fbf4e6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffd23f]">
+                  Close
+                </button>
+              </div>
+            </aside>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };
