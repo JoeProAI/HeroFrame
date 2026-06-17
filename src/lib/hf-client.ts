@@ -3,6 +3,7 @@
 // BYOK client helpers. The user's Kie key and a per-browser owner id live only
 // in localStorage and are sent as headers on every API call.
 const KEY_STORAGE = "heroframe.kieKey";
+const ELEVENLABS_KEY_STORAGE = "heroframe.elevenLabsKey";
 const OWNER_STORAGE = "heroframe.owner";
 
 export const getKieKey = (): string => {
@@ -13,6 +14,16 @@ export const getKieKey = (): string => {
 export const setKieKey = (key: string): void => {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(KEY_STORAGE, key.trim());
+};
+
+export const getElevenLabsKey = (): string => {
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem(ELEVENLABS_KEY_STORAGE) ?? "";
+};
+
+export const setElevenLabsKey = (key: string): void => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(ELEVENLABS_KEY_STORAGE, key.trim());
 };
 
 export const getOwnerId = (): string => {
@@ -29,7 +40,9 @@ export const getOwnerId = (): string => {
 export const hfFetch = (input: string, init: RequestInit = {}): Promise<Response> => {
   const headers = new Headers(init.headers ?? {});
   const key = getKieKey();
+  const elevenLabsKey = getElevenLabsKey();
   if (key) headers.set("x-kie-key", key);
+  if (elevenLabsKey) headers.set("x-elevenlabs-key", elevenLabsKey);
   headers.set("x-hf-owner", getOwnerId());
   return fetch(input, { ...init, headers });
 };

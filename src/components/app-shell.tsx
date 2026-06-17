@@ -6,13 +6,14 @@ import { useCharacters } from "@/lib/use-characters";
 import { useStylePresets } from "@/lib/use-style-presets";
 import { useFrames, type Frame } from "@/lib/use-frames";
 import { buildFightShots, expandShots } from "@/lib/shots";
-import { findModelOption, modelCatalog, defaultModel, pipelineModels, ttsVoices } from "@/lib/kie/models";
-import { hfFetch, getKieKey, setKieKey } from "@/lib/hf-client";
+import { expandedTtsVoices, findModelOption, modelCatalog, defaultModel, pipelineModels, ttsVoices, type TtsVoiceOption } from "@/lib/kie/models";
+import { hfFetch, getElevenLabsKey, getKieKey, setElevenLabsKey, setKieKey } from "@/lib/hf-client";
 
 type Status = "idle" | "loading" | "success" | "error";
 type Speed = "fast" | "balanced" | "quality";
 type Tab = "cast" | "scenes" | "fight" | "lipsync" | "frames" | "history";
 type GenerationKind = "reference" | "scene" | "variation" | "fight" | "video" | "adhoc";
+type ImportedVoice = TtsVoiceOption & { category?: string };
 type TaskLookupResponse = {
   ok?: boolean;
   error?: string;
@@ -22,6 +23,8 @@ type TaskLookupResponse = {
   resultUrl?: string;
   failMsg?: string;
 };
+
+const CUSTOM_VOICE_ID = "__custom__";
 
 const panel = "rounded-2xl border border-[#2e2640] bg-[#181320]/70 backdrop-blur-sm";
 const labelCls = "text-[11px] font-bold uppercase tracking-[0.16em] text-[#b3a7c4]";
@@ -56,12 +59,17 @@ export const AppShell = () => {
   const [uploading, setUploading] = useState(false);
   const [kieKeyInput, setKieKeyInput] = useState("");
   const [hasKey, setHasKey] = useState(false);
+  const [elevenLabsKeyInput, setElevenLabsKeyInput] = useState("");
+  const [hasElevenLabsKey, setHasElevenLabsKey] = useState(false);
+  const [importedVoices, setImportedVoices] = useState<ImportedVoice[]>([]);
+  const [importingVoices, setImportingVoices] = useState(false);
   const [useIdeoChar, setUseIdeoChar] = useState(false);
 
   // Lipsync pipeline
   const [lipImageId, setLipImageId] = useState<string>("");
   const [lipText, setLipText] = useState("");
   const [lipVoice, setLipVoice] = useState<string>(ttsVoices[0].id);
+  const [customVoiceId, setCustomVoiceId] = useState("");
   const [lipRes, setLipRes] = useState<"480p" | "720p">("480p");
 
   // Model selection per mode
@@ -103,6 +111,17 @@ export const AppShell = () => {
   const imageModelOption = findModelOption("image", imageModel);
   const editModelOption = findModelOption("image-edit", editModel);
   const videoModelOption = findModelOption("video", videoModel);
+  const legacyVoiceOptions: TtsVoiceOption[] = ttsVoices.map((voice) => ({
+    id: voice.id,
+    label: voice.label.replace("â€”", "-"),
+    tone: "Kie preset",
+    source: "built-in",
+  }));
+  const voiceOptions = [...legacyVoiceOptions, ...expandedTtsVoices, ...importedVoices].reduce<TtsVoiceOption[]>((acc, voice) => {
+    if (!acc.some((existing) => existing.id === voice.id)) acc.push(voice);
+    return acc;
+  }, []);
+  const selectedVoice = voiceOptions.find((voice) => voice.id === lipVoice);
 
   const refreshCredits = async () => {
     try {
@@ -116,9 +135,12 @@ export const AppShell = () => {
 
   useEffect(() => {
     const existing = getKieKey();
+    const existingElevenLabs = getElevenLabsKey();
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasKey(existing.length > 0);
     setKieKeyInput(existing);
+    setHasElevenLabsKey(existingElevenLabs.length > 0);
+    setElevenLabsKeyInput(existingElevenLabs);
     void refreshCredits();
   }, []);
 
@@ -128,6 +150,38 @@ export const AppShell = () => {
     setStatus("success");
     setMessage(kieKeyInput.trim() ? "Kie key saved in your browser." : "Kie key cleared.");
     await refreshCredits();
+  };
+
+  const saveElevenLabsKey = () => {
+    setElevenLabsKey(elevenLabsKeyInput);
+    setHasElevenLabsKey(elevenLabsKeyInput.trim().length > 0);
+    setStatus("success");
+    setMessage(elevenLabsKeyInput.trim() ? "ElevenLabs key saved in your browser." : "ElevenLabs key cleared.");
+  };
+
+  const importElevenLabsVoices = async () => {
+    setImportingVoices(true);
+    setStatus("loading");
+    setMessage("Importing ElevenLabs voices...");
+    try {
+      if (elevenLabsKeyInput.trim() !== getElevenLabsKey()) {
+        setElevenLabsKey(elevenLabsKeyInput);
+        setHasElevenLabsKey(elevenLabsKeyInput.trim().length > 0);
+      }
+      const response = await hfFetch("/api/elevenlabs/voices");
+      const payload = (await response.json().catch(() => null)) as { ok?: boolean; voices?: ImportedVoice[]; error?: unknown } | null;
+      if (!response.ok || !payload?.ok) {
+        throw new Error(typeof payload?.error === "string" ? payload.error : "Could not import ElevenLabs voices.");
+      }
+      setImportedVoices(payload.voices ?? []);
+      setStatus("success");
+      setMessage(`Imported ${(payload.voices ?? []).length} ElevenLabs voices.`);
+    } catch (error) {
+      setStatus("error");
+      setMessage(error instanceof Error ? error.message : "Could not import ElevenLabs voices.");
+    } finally {
+      setImportingVoices(false);
+    }
   };
 
   const failureMessage = (error: unknown): string => (error instanceof Error ? error.message : "Generation failed.");
@@ -492,15 +546,37 @@ export const AppShell = () => {
       setMessage("Add the line you want them to say.");
       return;
     }
+    const voiceId = lipVoice === CUSTOM_VOICE_ID ? customVoiceId.trim() : lipVoice;
+    if (!voiceId) {
+      setStatus("error");
+      setMessage("Choose a voice or paste a custom voice ID.");
+      return;
+    }
     setStatus("loading");
     try {
-      setMessage("Generating voice (ElevenLabs)...");
-      const audioUrl = await runKieGeneration({
-        prompt: "",
-        model: pipelineModels.tts,
-        input: { text: lipText.trim(), voice: lipVoice },
-        onProgress: (s) => setMessage(`Voice... (${s})`),
-      });
+      const useDirectElevenLabs = selectedVoice?.source === "elevenlabs" || (lipVoice === CUSTOM_VOICE_ID && hasElevenLabsKey);
+      let audioUrl: string;
+      if (useDirectElevenLabs) {
+        setMessage("Generating voice with ElevenLabs...");
+        const response = await hfFetch("/api/elevenlabs/speech", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ voiceId, text: lipText.trim() }),
+        });
+        const payload = (await response.json().catch(() => null)) as { ok?: boolean; url?: string; error?: string } | null;
+        if (!response.ok || !payload?.ok || !payload.url) {
+          throw new Error(payload?.error ?? "ElevenLabs speech generation failed.");
+        }
+        audioUrl = payload.url;
+      } else {
+        setMessage("Generating voice (Kie ElevenLabs)...");
+        audioUrl = await runKieGeneration({
+          prompt: "",
+          model: pipelineModels.tts,
+          input: { text: lipText.trim(), voice: voiceId },
+          onProgress: (s) => setMessage(`Voice... (${s})`),
+        });
+      }
       setMessage("Animating talking character (lipsync)...");
       const videoUrl = await runKieGeneration({
         prompt: "",
@@ -835,6 +911,24 @@ export const AppShell = () => {
                 <p className="mt-4 text-sm text-[#6b6480]">Add a character in the Cast tab first.</p>
               ) : (
                 <div className="mt-4 grid gap-3">
+                  <div className="rounded-xl border border-[#2e2640] bg-[#0c0a12] p-3">
+                    <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto]">
+                      <input
+                        type="password"
+                        value={elevenLabsKeyInput}
+                        onChange={(e) => setElevenLabsKeyInput(e.target.value)}
+                        placeholder="Optional ElevenLabs API key"
+                        className={field}
+                      />
+                      <button type="button" onClick={saveElevenLabsKey} className={`${btn} border border-[#2e2640] bg-transparent text-[#fbf4e6] hover:bg-[#181320]`}>
+                        {hasElevenLabsKey ? "Update key" : "Save key"}
+                      </button>
+                      <button type="button" onClick={importElevenLabsVoices} disabled={importingVoices || !elevenLabsKeyInput.trim()} className={`${btn} bg-[#ff8cc8] text-[#05040a] hover:bg-[#ffa5d4]`}>
+                        {importingVoices ? "Importing..." : "Import voices"}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-[11px] leading-4 text-[#6b6480]">Voice import only lists voices. Speech is generated later when you make a talking clip.</p>
+                  </div>
                   <div className="grid gap-2">
                     <label className={labelCls} htmlFor="lipchar">Character</label>
                     <select id="lipchar" value={lipImageId || activeId || ""} onChange={(e) => setLipImageId(e.target.value)} className={field}>
@@ -847,10 +941,20 @@ export const AppShell = () => {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="grid gap-2">
-                      <label className={labelCls} htmlFor="lipvoice">Voice</label>
+                      <label className={labelCls} htmlFor="lipvoice">Voice ({voiceOptions.length + 1})</label>
                       <select id="lipvoice" value={lipVoice} onChange={(e) => setLipVoice(e.target.value)} className={field}>
-                        {ttsVoices.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+                        <optgroup label="Built in">
+                          {voiceOptions.filter((v) => v.source === "built-in").map((v) => <option key={v.id} value={v.id}>{v.label} - {v.tone}</option>)}
+                        </optgroup>
+                        {importedVoices.length > 0 ? (
+                          <optgroup label="Imported ElevenLabs">
+                            {voiceOptions.filter((v) => v.source === "elevenlabs").map((v) => <option key={v.id} value={v.id}>{v.label} - {v.tone}</option>)}
+                          </optgroup>
+                        ) : null}
+                        <option value={CUSTOM_VOICE_ID}>Custom voice ID...</option>
                       </select>
+                      {selectedVoice ? <p className="text-[11px] text-[#6b6480]">{selectedVoice.source === "elevenlabs" ? "ElevenLabs direct" : "Kie voice"} / {selectedVoice.tone}</p> : null}
+                      {lipVoice === CUSTOM_VOICE_ID ? <input value={customVoiceId} onChange={(e) => setCustomVoiceId(e.target.value)} placeholder="Paste ElevenLabs voice_id" className={field} /> : null}
                     </div>
                     <div className="grid gap-2">
                       <label className={labelCls} htmlFor="lipres">Resolution</label>

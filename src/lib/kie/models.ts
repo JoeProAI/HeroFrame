@@ -111,6 +111,41 @@ export const ttsVoices: { id: string; label: string }[] = [
   { id: "8JVbfL6oEdmuxKn5DK2C", label: "Johnny — Narrator" },
 ];
 
+export type TtsVoiceOption = {
+  id: string;
+  label: string;
+  tone: string;
+  source: "built-in" | "elevenlabs";
+  previewUrl?: string;
+};
+
+export const expandedTtsVoices: TtsVoiceOption[] = [
+  { id: "21m00Tcm4TlvDq8ikWAM", label: "Rachel", tone: "Calm storyteller", source: "built-in" },
+  { id: "AZnzlk1XvdvUeBnXmlld", label: "Domi", tone: "Confident lead", source: "built-in" },
+  { id: "EXAVITQu4vr4xnSDxMaL", label: "Bella", tone: "Warm and polished", source: "built-in" },
+  { id: "ErXwobaYiN019PkySvjV", label: "Antoni", tone: "Conversational", source: "built-in" },
+  { id: "MF3mGyEYCl7XYWbV9V6O", label: "Elli", tone: "Young and animated", source: "built-in" },
+  { id: "TxGEqnHWrfWFTfGW9XjX", label: "Josh", tone: "Natural male", source: "built-in" },
+  { id: "VR6AewLTigWG4xSOukaG", label: "Arnold", tone: "Action trailer", source: "built-in" },
+  { id: "pNInz6obpgDQGcFmaJgB", label: "Adam", tone: "Deep narrator", source: "built-in" },
+  { id: "yoZ06aMxZJJ28mfd3POQ", label: "Sam", tone: "Casual", source: "built-in" },
+  { id: "2EiwWnXFnvU5JabPnv8n", label: "Clyde", tone: "Gruff character", source: "built-in" },
+  { id: "IKne3meq5aSn9XLyUdCD", label: "Charlie", tone: "Friendly character", source: "built-in" },
+  { id: "N2lVS1w4EtoT3dr4eOWO", label: "Callum", tone: "Dramatic", source: "built-in" },
+  { id: "ODq5zmih8GrVes37Dizd", label: "Patrick", tone: "Mature narrator", source: "built-in" },
+  { id: "SOYHLrjzK2X1ezoPC6cr", label: "Harry", tone: "Energetic", source: "built-in" },
+  { id: "TX3LPaxmHKxFdv7VOQHJ", label: "Liam", tone: "Clear young male", source: "built-in" },
+  { id: "ThT5KcBeYPX3keUQqHPh", label: "Dorothy", tone: "Warm senior", source: "built-in" },
+  { id: "XB0fDUnXU5powFXDhCwa", label: "Charlotte", tone: "Refined character", source: "built-in" },
+  { id: "XrExE9yKIg1WjnnlVkGX", label: "Matilda", tone: "Expressive storyteller", source: "built-in" },
+  { id: "Yko7PKHZNXotIFUBG7I9", label: "Matthew", tone: "Documentary", source: "built-in" },
+  { id: "ZQe5CZNOzWyzPSCn5a3c", label: "James Classic", tone: "Classic narrator", source: "built-in" },
+  { id: "Zlb1dXrM653N07WRdFW3", label: "Joseph", tone: "Calm male", source: "built-in" },
+  { id: "piTKgcLEGmPE4e6mEKli", label: "Nicole", tone: "Soft-spoken", source: "built-in" },
+  { id: "t0jbNlBVZ17f02VDIeMI", label: "Jessie", tone: "Animated character", source: "built-in" },
+  { id: "g5CIjZEefAph4nQFvHAz", label: "Ethan", tone: "Grounded young male", source: "built-in" },
+];
+
 export const findModelOption = (mode: KieMode, id: string): ModelOption | undefined =>
   modelCatalog[mode].find((model) => model.id === id);
 
