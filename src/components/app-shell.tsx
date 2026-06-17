@@ -6,7 +6,7 @@ import { useCharacters } from "@/lib/use-characters";
 import { useStylePresets } from "@/lib/use-style-presets";
 import { useFrames, type Frame } from "@/lib/use-frames";
 import { buildFightShots, expandShots } from "@/lib/shots";
-import { modelCatalog, defaultModel, pipelineModels, ttsVoices } from "@/lib/kie/models";
+import { findModelOption, modelCatalog, defaultModel, pipelineModels, ttsVoices } from "@/lib/kie/models";
 import { hfFetch, getKieKey, setKieKey } from "@/lib/hf-client";
 
 type Status = "idle" | "loading" | "success" | "error";
@@ -100,6 +100,9 @@ export const AppShell = () => {
 
   const busy = status === "loading";
   const styleHint = activePreset?.text;
+  const imageModelOption = findModelOption("image", imageModel);
+  const editModelOption = findModelOption("image-edit", editModel);
+  const videoModelOption = findModelOption("video", videoModel);
 
   const refreshCredits = async () => {
     try {
@@ -583,19 +586,6 @@ export const AppShell = () => {
             <h1 className="font-[family-name:var(--font-bricolage)] text-lg font-black uppercase tracking-tight sm:text-xl">Cartoon Studio</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {/* Image model */}
-            <select value={imageModel} onChange={(e) => setImageModel(e.target.value)} title="Text-to-image model" className="min-h-9 rounded-lg border border-[#2e2640] bg-[#0c0a12] px-2 text-xs text-[#fbf4e6]">
-              {modelCatalog.image.map((m) => <option key={m.id} value={m.id}>img: {m.label}</option>)}
-            </select>
-            {/* Edit model */}
-            <select value={editModel} onChange={(e) => setEditModel(e.target.value)} title="Character-reference (image-to-image) model" className="min-h-9 rounded-lg border border-[#2e2640] bg-[#0c0a12] px-2 text-xs text-[#fbf4e6]">
-              {modelCatalog["image-edit"].map((m) => <option key={m.id} value={m.id}>ref: {m.label}</option>)}
-            </select>
-            {/* Video model */}
-            <select value={videoModel} onChange={(e) => setVideoModel(e.target.value)} title="Image-to-video model" className="min-h-9 rounded-lg border border-[#2e2640] bg-[#0c0a12] px-2 text-xs text-[#fbf4e6]">
-              {modelCatalog.video.map((m) => <option key={m.id} value={m.id}>vid: {m.label}</option>)}
-            </select>
-            {/* Style preset selector */}
             <select value={presetId ?? ""} onChange={(e) => setPresetId(e.target.value || null)} title="Style preset" className="min-h-9 rounded-lg border border-[#2e2640] bg-[#0c0a12] px-2 text-xs text-[#fbf4e6]">
               <option value="">No style</option>
               {presets.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -614,6 +604,50 @@ export const AppShell = () => {
             <button key={t.id} type="button" onClick={() => setTab(t.id)} className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-bold ${tab === t.id ? "bg-[#ffd23f] text-[#05040a]" : "border border-[#2e2640] text-[#b3a7c4]"}`}>{t.label}</button>
           ))}
         </div>
+
+        <section className="border-b border-[#2e2640] bg-[#0c0a12]/55 px-5 py-4 sm:px-8">
+          <div className="grid gap-3 xl:grid-cols-3">
+            <div className="rounded-xl border border-[#2e2640] bg-[#181320]/70 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <label className={labelCls} htmlFor="image-model">New image</label>
+                <span className="rounded-full bg-[#ff5a3c]/15 px-2 py-0.5 text-[10px] font-black uppercase text-[#ff8c79]">{imageModelOption?.badge ?? "model"}</span>
+              </div>
+              <select id="image-model" value={imageModel} onChange={(e) => setImageModel(e.target.value)} className={`${field} mt-2 min-h-10 text-xs`}>
+                {modelCatalog.image.map((m) => <option key={m.id} value={m.id}>{m.family} / {m.label}</option>)}
+              </select>
+              <div className="mt-2 flex items-start justify-between gap-3">
+                <p className="min-w-0 text-xs leading-4 text-[#b3a7c4]">{imageModelOption?.hint}</p>
+                <code className="max-w-[45%] truncate rounded-md bg-[#05040a] px-1.5 py-1 text-[10px] text-[#7c8499]">{imageModel}</code>
+              </div>
+            </div>
+            <div className="rounded-xl border border-[#2e2640] bg-[#181320]/70 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <label className={labelCls} htmlFor="edit-model">Reference image</label>
+                <span className="rounded-full bg-[#8a5cff]/15 px-2 py-0.5 text-[10px] font-black uppercase text-[#c4afff]">{editModelOption?.badge ?? "model"}</span>
+              </div>
+              <select id="edit-model" value={editModel} onChange={(e) => setEditModel(e.target.value)} className={`${field} mt-2 min-h-10 text-xs`}>
+                {modelCatalog["image-edit"].map((m) => <option key={m.id} value={m.id}>{m.family} / {m.label}</option>)}
+              </select>
+              <div className="mt-2 flex items-start justify-between gap-3">
+                <p className="min-w-0 text-xs leading-4 text-[#b3a7c4]">{editModelOption?.hint}</p>
+                <code className="max-w-[45%] truncate rounded-md bg-[#05040a] px-1.5 py-1 text-[10px] text-[#7c8499]">{editModel}</code>
+              </div>
+            </div>
+            <div className="rounded-xl border border-[#2e2640] bg-[#181320]/70 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <label className={labelCls} htmlFor="video-model">Animate</label>
+                <span className="rounded-full bg-[#2ec4b6]/15 px-2 py-0.5 text-[10px] font-black uppercase text-[#7be6dc]">{videoModelOption?.badge ?? "model"}</span>
+              </div>
+              <select id="video-model" value={videoModel} onChange={(e) => setVideoModel(e.target.value)} className={`${field} mt-2 min-h-10 text-xs`}>
+                {modelCatalog.video.map((m) => <option key={m.id} value={m.id}>{m.family} / {m.label}</option>)}
+              </select>
+              <div className="mt-2 flex items-start justify-between gap-3">
+                <p className="min-w-0 text-xs leading-4 text-[#b3a7c4]">{videoModelOption?.hint}</p>
+                <code className="max-w-[45%] truncate rounded-md bg-[#05040a] px-1.5 py-1 text-[10px] text-[#7c8499]">{videoModel}</code>
+              </div>
+            </div>
+          </div>
+        </section>
 
         <div className="flex-1 p-5 sm:p-8">
           {message ? <div className={`mb-5 rounded-xl border px-3 py-2 text-sm font-medium ${feedbackColor}`} role="status">{message}</div> : null}
@@ -654,7 +688,7 @@ export const AppShell = () => {
                       {["bg-hero", "bg-manga", "bg-chibi", "bg-mecha", "bg-noir"].map((name) => (
                         <figure key={name} className="overflow-hidden rounded-xl border border-[#2e2640] bg-[#0c0a12]">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={`/bg/${name}.png`} alt="Sample cartoon style" className="aspect-square w-full object-cover" />
+                          <img src={`/bg/${name}.webp`} alt="Sample cartoon style" className="aspect-square w-full object-cover" />
                         </figure>
                       ))}
                     </div>

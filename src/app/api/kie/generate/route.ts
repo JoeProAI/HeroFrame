@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createKieTask, waitForKieTask } from "@/lib/kie/client";
 import { getKieConfig, resolveKieKey } from "@/lib/kie/env";
-import { resolveKieModel, type KieMode, type KieSpeed } from "@/lib/kie/models";
+import { buildKieModeInput, resolveKieModel, type KieMode, type KieSpeed } from "@/lib/kie/models";
 
 export const maxDuration = 60;
 
@@ -51,15 +51,15 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     const prompt = body.styleHint?.trim()
       ? `${body.prompt!.trim()}. Style: ${body.styleHint.trim()}`
       : body.prompt!.trim();
-    input = { prompt };
-    if (mode === "video") {
-      if (body.imageUrls?.length) input.image_url = body.imageUrls[0];
-      input.resolution = body.resolution ?? "720p";
-      input.duration = body.duration ?? "5";
-    } else {
-      if (body.imageSize) input.image_size = body.imageSize;
-      if (body.imageUrls?.length) input.input_urls = body.imageUrls;
-    }
+    input = buildKieModeInput({
+      mode,
+      model,
+      prompt,
+      imageUrls: body.imageUrls,
+      imageSize: body.imageSize,
+      resolution: body.resolution,
+      duration: body.duration,
+    });
   }
 
   let apiKey: string;

@@ -1,5 +1,6 @@
 export type KieMode = "image" | "image-edit" | "video";
 export type KieSpeed = "fast" | "balanced" | "quality";
+type ModelFamily = "OpenAI" | "Google" | "Seedream" | "Flux" | "Grok" | "Qwen" | "Ideogram" | "Z-Image" | "Bytedance" | "Hailuo" | "Kling";
 
 // Model ids are passed straight to Kie's unified `model` field.
 // Swapping a model never requires touching the client or routes.
@@ -30,32 +31,55 @@ export const resolveKieModel = (mode: KieMode, speed: KieSpeed = "balanced"): st
   return imageModels[speed];
 };
 
-export type ModelOption = { id: string; label: string };
+export type ModelOption = {
+  id: string;
+  label: string;
+  family: ModelFamily;
+  badge: "fast" | "balanced" | "quality" | "reference" | "cinematic";
+  hint: string;
+};
 
 // Curated catalog. Each list shares the param contract its mode uses
 // (image/edit: prompt [+ input_urls]; video: prompt + image_url). Only ids
 // confirmed against the Kie docs/live API are included so nothing silently fails.
 export const modelCatalog: Record<KieMode, ModelOption[]> = {
   image: [
-    { id: "gpt-image-2-text-to-image", label: "GPT Image-2" },
-    { id: "google/nano-banana", label: "Nano Banana (fast)" },
-    { id: "google/nano-banana-pro", label: "Nano Banana Pro" },
-    { id: "grok-imagine/text-to-image", label: "Grok Imagine" },
-    { id: "qwen2/text-to-image", label: "Qwen2" },
-    { id: "seedream-v4-text-to-image", label: "Seedream 4" },
-    { id: "ideogram/v3-text-to-image", label: "Ideogram V3" },
-    { id: "flux-2/flex-text-to-image", label: "Flux 2" },
-    { id: "google/imagen4", label: "Imagen 4" },
+    { id: "gpt-image-2-text-to-image", label: "GPT Image-2", family: "OpenAI", badge: "quality", hint: "General purpose image generation." },
+    { id: "gpt-image/1.5-text-to-image", label: "GPT Image-1.5", family: "OpenAI", badge: "balanced", hint: "Solid prompt following with lower overhead." },
+    { id: "google/nano-banana", label: "Nano Banana", family: "Google", badge: "fast", hint: "Fast ideation and character-ish prompts." },
+    { id: "nano-banana-2", label: "Nano Banana 2", family: "Google", badge: "fast", hint: "Newer Google image model with strong text handling." },
+    { id: "google/nano-banana-pro", label: "Nano Banana Pro", family: "Google", badge: "quality", hint: "Higher fidelity Google image generation." },
+    { id: "grok-imagine/text-to-image", label: "Grok Imagine", family: "Grok", badge: "fast", hint: "Energetic stylized image drafts." },
+    { id: "qwen2/text-to-image", label: "Qwen2", family: "Qwen", badge: "balanced", hint: "Good multilingual and design text handling." },
+    { id: "seedream-v4-text-to-image", label: "Seedream 4", family: "Seedream", badge: "balanced", hint: "Clean commercial-style imagery." },
+    { id: "seedream/4.5-text-to-image", label: "Seedream 4.5", family: "Seedream", badge: "quality", hint: "Photorealistic, higher-detail scenes." },
+    { id: "seedream/5-lite-text-to-image", label: "Seedream 5 Lite", family: "Seedream", badge: "fast", hint: "Newer fast Seedream option." },
+    { id: "ideogram/v3-text-to-image", label: "Ideogram V3", family: "Ideogram", badge: "quality", hint: "Graphic layouts and poster-style prompts." },
+    { id: "flux-2/flex-text-to-image", label: "Flux 2 Flex", family: "Flux", badge: "balanced", hint: "Detailed composition control." },
+    { id: "flux-2/pro-text-to-image", label: "Flux 2 Pro", family: "Flux", badge: "quality", hint: "Sharper Flux output for finished frames." },
+    { id: "google/imagen4-fast", label: "Imagen 4 Fast", family: "Google", badge: "fast", hint: "Quick Google image drafts." },
+    { id: "google/imagen4", label: "Imagen 4", family: "Google", badge: "balanced", hint: "Balanced Google image generation." },
+    { id: "google/imagen4-ultra", label: "Imagen 4 Ultra", family: "Google", badge: "quality", hint: "Highest-quality Imagen option." },
+    { id: "z-image", label: "Z-Image", family: "Z-Image", badge: "balanced", hint: "Photorealistic and design-forward images." },
   ],
   "image-edit": [
-    { id: "gpt-image-2-image-to-image", label: "GPT Image-2 (reference)" },
-    { id: "grok-imagine/image-to-image", label: "Grok Imagine (reference)" },
-    { id: "google/nano-banana-edit", label: "Nano Banana Edit (fast)" },
+    { id: "gpt-image-2-image-to-image", label: "GPT Image-2 Reference", family: "OpenAI", badge: "reference", hint: "Best default for reusable character references." },
+    { id: "gpt-image/1.5-image-to-image", label: "GPT Image-1.5 Reference", family: "OpenAI", badge: "reference", hint: "Reference edits with lower overhead." },
+    { id: "grok-imagine/image-to-image", label: "Grok Imagine Reference", family: "Grok", badge: "fast", hint: "Stylized reference-driven variations." },
+    { id: "google/nano-banana-edit", label: "Nano Banana Edit", family: "Google", badge: "fast", hint: "Fast Google image edits." },
+    { id: "seedream/4.5-edit", label: "Seedream 4.5 Edit", family: "Seedream", badge: "quality", hint: "Polished image edits and transformations." },
+    { id: "seedream/5-lite-image-to-image", label: "Seedream 5 Lite Reference", family: "Seedream", badge: "fast", hint: "Fast newer reference image generation." },
+    { id: "qwen/image-edit", label: "Qwen Image Edit", family: "Qwen", badge: "reference", hint: "Precise single-reference edits and text changes." },
   ],
   video: [
-    { id: "bytedance/v1-pro-fast-image-to-video", label: "Seedance V1 Pro Fast" },
-    { id: "bytedance/v1-pro-image-to-video", label: "Seedance V1 Pro" },
-    { id: "bytedance/v1-lite-image-to-video", label: "Seedance V1 Lite" },
+    { id: "bytedance/v1-pro-fast-image-to-video", label: "Seedance V1 Pro Fast", family: "Bytedance", badge: "fast", hint: "Fast image-to-video default." },
+    { id: "bytedance/v1-pro-image-to-video", label: "Seedance V1 Pro", family: "Bytedance", badge: "balanced", hint: "Balanced image animation." },
+    { id: "bytedance/v1-lite-image-to-video", label: "Seedance V1 Lite", family: "Bytedance", badge: "fast", hint: "Lower-cost quick clips." },
+    { id: "bytedance/seedance-2-fast", label: "Seedance 2.0 Fast", family: "Bytedance", badge: "fast", hint: "Newer fast Seedance with first-frame animation." },
+    { id: "hailuo/2-3-image-to-video-standard", label: "Hailuo 2.3 Standard", family: "Hailuo", badge: "balanced", hint: "Cinematic motion with standard quality." },
+    { id: "hailuo/2-3-image-to-video-pro", label: "Hailuo 2.3 Pro", family: "Hailuo", badge: "quality", hint: "Higher-quality Hailuo animation." },
+    { id: "kling-2.6/image-to-video", label: "Kling 2.6", family: "Kling", badge: "cinematic", hint: "Cinematic image animation, optional sound disabled." },
+    { id: "grok-imagine/image-to-video", label: "Grok Imagine Video", family: "Grok", badge: "fast", hint: "Fast stylized image-to-video clips." },
   ],
 };
 
@@ -86,3 +110,107 @@ export const ttsVoices: { id: string; label: string }[] = [
   { id: "PPzYpIqttlTYA83688JI", label: "Pirate Marshal" },
   { id: "8JVbfL6oEdmuxKn5DK2C", label: "Johnny — Narrator" },
 ];
+
+export const findModelOption = (mode: KieMode, id: string): ModelOption | undefined =>
+  modelCatalog[mode].find((model) => model.id === id);
+
+const singleImage = (imageUrls?: string[]): string | undefined => imageUrls?.find((url) => url.trim());
+
+const numericDuration = (duration: string | undefined, fallback: number): number => {
+  const parsed = Number(duration);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+export const buildKieModeInput = ({
+  mode,
+  model,
+  prompt,
+  imageUrls,
+  imageSize,
+  resolution,
+  duration,
+}: {
+  mode: KieMode;
+  model: string;
+  prompt: string;
+  imageUrls?: string[];
+  imageSize?: string;
+  resolution?: string;
+  duration?: string;
+}): Record<string, unknown> => {
+  if (mode === "video") {
+    const imageUrl = singleImage(imageUrls);
+    if (model === "bytedance/seedance-2-fast") {
+      return {
+        prompt,
+        ...(imageUrl ? { first_frame_url: imageUrl } : {}),
+        return_last_frame: false,
+        generate_audio: false,
+        resolution: resolution ?? "720p",
+        aspect_ratio: "16:9",
+        duration: numericDuration(duration, 5),
+      };
+    }
+    if (model.startsWith("hailuo/")) {
+      return {
+        prompt,
+        ...(imageUrl ? { image_url: imageUrl } : {}),
+        resolution: "768P",
+        duration: duration ?? "6",
+      };
+    }
+    if (model.startsWith("kling-")) {
+      return {
+        prompt,
+        ...(imageUrl ? { image_urls: [imageUrl] } : {}),
+        sound: false,
+        duration: duration ?? "5",
+      };
+    }
+    if (model === "grok-imagine/image-to-video") {
+      return {
+        prompt,
+        ...(imageUrl ? { image_urls: [imageUrl] } : {}),
+        mode: "normal",
+        duration: duration ?? "6",
+        resolution: resolution ?? "480p",
+        aspect_ratio: "16:9",
+      };
+    }
+    return {
+      prompt,
+      ...(imageUrl ? { image_url: imageUrl } : {}),
+      resolution: resolution ?? "720p",
+      duration: duration ?? "5",
+    };
+  }
+
+  if (mode === "image-edit") {
+    const refs = imageUrls?.filter((url) => url.trim()) ?? [];
+    if (model.startsWith("seedream/")) {
+      return { prompt, image_urls: refs, aspect_ratio: "1:1", quality: "basic", nsfw_checker: true };
+    }
+    if (model === "qwen/image-edit") {
+      return { prompt, ...(refs[0] ? { image_url: refs[0] } : {}) };
+    }
+    if (model === "grok-imagine/image-to-image") {
+      return { prompt, image_urls: refs };
+    }
+    return { prompt, input_urls: refs };
+  }
+
+  if (model === "nano-banana-2") {
+    return { prompt, image_input: [], aspect_ratio: "auto", resolution: "1K", output_format: "png" };
+  }
+  if (model.startsWith("seedream/")) {
+    return { prompt, aspect_ratio: "1:1", quality: "basic", nsfw_checker: false };
+  }
+  if (model === "z-image") {
+    return { prompt, aspect_ratio: "1:1", nsfw_checker: true };
+  }
+  return {
+    prompt,
+    ...(imageSize ? { image_size: imageSize } : {}),
+    ...(imageUrls?.length ? { input_urls: imageUrls } : {}),
+  };
+};
