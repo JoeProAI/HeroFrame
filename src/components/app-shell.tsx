@@ -11,8 +11,25 @@ import { hfFetch, getElevenLabsKey, getKieKey, setElevenLabsKey, setKieKey } fro
 
 type Status = "idle" | "loading" | "success" | "error";
 type Speed = "fast" | "balanced" | "quality";
-type Tab = "cast" | "scenes" | "fight" | "lipsync" | "frames" | "history";
+type Tab = "studio" | "cast" | "scenes" | "fight" | "lipsync" | "frames" | "history";
 type GenerationKind = "reference" | "scene" | "variation" | "fight" | "video" | "adhoc";
+type BoardStatus = "idea" | "ready" | "rendering" | "done";
+type BoardCard = {
+  id: string;
+  title: string;
+  brief: string;
+  prompt: string;
+  modelHint: string;
+  status: BoardStatus;
+  createdAt: number;
+};
+type CoachMessage = {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  createdAt: number;
+  card?: Omit<BoardCard, "id" | "status" | "createdAt">;
+};
 type ImportedVoice = TtsVoiceOption & { category?: string };
 type TaskLookupResponse = {
   ok?: boolean;
@@ -25,6 +42,8 @@ type TaskLookupResponse = {
 };
 
 const CUSTOM_VOICE_ID = "__custom__";
+const BOARD_STORAGE = "heroframe.board";
+const COACH_STORAGE = "heroframe.artCoach";
 
 const panel = "rounded-2xl border border-[#2e2640] bg-[#181320]/70 backdrop-blur-sm";
 const labelCls = "text-[11px] font-bold uppercase tracking-[0.16em] text-[#b3a7c4]";
@@ -34,6 +53,7 @@ const btn =
   "inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-bold transition hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffd23f] disabled:cursor-not-allowed disabled:opacity-40 disabled:translate-y-0";
 
 const tabs: { id: Tab; label: string; dot: string }[] = [
+  { id: "studio", label: "Studio", dot: "#ffd23f" },
   { id: "cast", label: "Cast", dot: "#8a5cff" },
   { id: "scenes", label: "Scenes", dot: "#ff5a3c" },
   { id: "fight", label: "Versus", dot: "#2ec4b6" },
@@ -43,15 +63,91 @@ const tabs: { id: Tab; label: string; dot: string }[] = [
 ];
 
 const speeds: Speed[] = ["fast", "balanced", "quality"];
+const boardColumns: { id: BoardStatus; label: string; accent: string }[] = [
+  { id: "idea", label: "Ideas", accent: "#ffd23f" },
+  { id: "ready", label: "Ready", accent: "#8a5cff" },
+  { id: "rendering", label: "Rendering", accent: "#ff5a3c" },
+  { id: "done", label: "Done", accent: "#2ec4b6" },
+];
 
 const isVideoUrl = (url: string): boolean => /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url);
+
+const makeId = (): string => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `hf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+};
+
+const parseBoardCards = (value: string | null): BoardCard[] => {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is BoardCard => {
+      if (!item || typeof item !== "object") return false;
+      const card = item as Partial<BoardCard>;
+      return typeof card.id === "string" && typeof card.title === "string" && typeof card.brief === "string" && typeof card.prompt === "string" && typeof card.modelHint === "string" && typeof card.createdAt === "number" && (card.status === "idea" || card.status === "ready" || card.status === "rendering" || card.status === "done");
+    });
+  } catch {
+    return [];
+  }
+};
+
+const parseCoachMessages = (value: string | null): CoachMessage[] => {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is CoachMessage => {
+      if (!item || typeof item !== "object") return false;
+      const message = item as Partial<CoachMessage>;
+      return typeof message.id === "string" && (message.role === "user" || message.role === "assistant") && typeof message.text === "string" && typeof message.createdAt === "number";
+    });
+  } catch {
+    return [];
+  }
+};
+
+const buildCoachReply = (input: string, activeHero?: string): CoachMessage => {
+  const idea = input.trim();
+  const lower = idea.toLowerCase();
+  const isMotion = lower.includes("video") || lower.includes("animate") || lower.includes("motion") || lower.includes("clip");
+  const isFight = lower.includes("fight") || lower.includes("versus") || lower.includes("battle");
+  const imagePick = modelCatalog.image.find((model) => model.id === "seedream/4.5-text-to-image") ?? modelCatalog.image[0];
+  const videoPick = modelCatalog.video.find((model) => model.id === "bytedance/seedance-2-fast") ?? modelCatalog.video[0];
+  const editPick = modelCatalog["image-edit"].find((model) => model.id === "gpt-image-2-image-to-image") ?? modelCatalog["image-edit"][0];
+  const model = isMotion ? videoPick : activeHero ? editPick : imagePick;
+  const title = idea.split(/[.!?]/)[0]?.slice(0, 70) || "Cartoon scene idea";
+  const prompt = [
+    activeHero ? `Keep ${activeHero} visually consistent.` : "Original cartoon cast.",
+    isFight ? "Stage it as a clear three-beat confrontation with readable silhouettes." : "Frame it as a production-ready cartoon key art scene.",
+    idea,
+    "Use bold shapes, readable emotion, strong pose language, and a background that supports the story beat.",
+  ].join(" ");
+  const text = [
+    `Direction: ${isMotion ? "build a still first, then animate the strongest frame" : "start with a polished image frame"}.`,
+    `Model lane: ${model.family} / ${model.label}.`,
+    "Creative check: name the emotion, the camera angle, and the one prop or background detail that makes the shot memorable before generating.",
+  ].join("\n");
+  return {
+    id: makeId(),
+    role: "assistant",
+    text,
+    createdAt: Date.now(),
+    card: {
+      title,
+      brief: isFight ? "Versus or action beat" : isMotion ? "Animation-ready shot" : "Cartoon key frame",
+      prompt,
+      modelHint: `${model.family} / ${model.label}`,
+    },
+  };
+};
 
 export const AppShell = () => {
   const { characters, deleted, activeCharacter, activeId, setActiveId, addCharacter, removeCharacter, restoreCharacter, purgeCharacter, loadDeleted } = useCharacters();
   const { presets, activePreset, activeId: presetId, setActiveId: setPresetId, addPreset } = useStylePresets();
   const { frames, history, addFrame, logGeneration, clearFrames } = useFrames();
 
-  const [tab, setTab] = useState<Tab>("cast");
+  const [tab, setTab] = useState<Tab>("studio");
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState("");
   const [speed, setSpeed] = useState<Speed>("balanced");
@@ -101,6 +197,11 @@ export const AppShell = () => {
   const [recoverPrompt, setRecoverPrompt] = useState("");
   const [recoverKind, setRecoverKind] = useState<GenerationKind>("adhoc");
   const [recoverType, setRecoverType] = useState<"image" | "video">("image");
+  const [boardCards, setBoardCards] = useState<BoardCard[]>([]);
+  const [coachMessages, setCoachMessages] = useState<CoachMessage[]>([]);
+  const [coachInput, setCoachInput] = useState("");
+  const [manualCardTitle, setManualCardTitle] = useState("");
+  const [manualCardBrief, setManualCardBrief] = useState("");
 
   // Fight
   const [fighterAId, setFighterAId] = useState<string>("");
@@ -137,13 +238,30 @@ export const AppShell = () => {
   useEffect(() => {
     const existing = getKieKey();
     const existingElevenLabs = getElevenLabsKey();
+    const storedBoard = parseBoardCards(window.localStorage.getItem(BOARD_STORAGE));
+    const storedCoach = parseCoachMessages(window.localStorage.getItem(COACH_STORAGE));
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasKey(existing.length > 0);
     setKieKeyInput(existing);
     setHasElevenLabsKey(existingElevenLabs.length > 0);
     setElevenLabsKeyInput(existingElevenLabs);
+    setBoardCards(storedBoard);
+    setCoachMessages(storedCoach.length ? storedCoach : [{
+      id: makeId(),
+      role: "assistant",
+      text: "Bring me a rough cartoon idea, a character problem, or a model question. I will turn it into a practical shot card before you spend credits.",
+      createdAt: Date.now(),
+    }]);
     void refreshCredits();
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(BOARD_STORAGE, JSON.stringify(boardCards));
+  }, [boardCards]);
+
+  useEffect(() => {
+    window.localStorage.setItem(COACH_STORAGE, JSON.stringify(coachMessages.slice(-30)));
+  }, [coachMessages]);
 
   useEffect(() => {
     if (!previewCharacter) return;
@@ -205,6 +323,63 @@ export const AppShell = () => {
       model: error instanceof KieGenerationTimeoutError ? (error.model ?? model) : model,
       error: [failureMessage(error), taskId].filter(Boolean).join(" "),
     });
+  };
+
+  const addBoardCard = (card: Omit<BoardCard, "id" | "status" | "createdAt">, statusValue: BoardStatus = "idea") => {
+    setBoardCards((current) => [
+      {
+        ...card,
+        id: makeId(),
+        status: statusValue,
+        createdAt: Date.now(),
+      },
+      ...current,
+    ]);
+    setStatus("success");
+    setMessage("Added a shot card to Studio.");
+  };
+
+  const moveBoardCard = (id: string, statusValue: BoardStatus) => {
+    setBoardCards((current) => current.map((card) => card.id === id ? { ...card, status: statusValue } : card));
+  };
+
+  const deleteBoardCard = (id: string) => {
+    setBoardCards((current) => current.filter((card) => card.id !== id));
+  };
+
+  const loadCardIntoScenes = (card: BoardCard) => {
+    setSceneTitle(card.title);
+    setStoryBeat(card.prompt);
+    setTab("scenes");
+    setStatus("success");
+    setMessage("Loaded the board card into Scenes.");
+  };
+
+  const createManualCard = () => {
+    if (!manualCardTitle.trim() && !manualCardBrief.trim()) {
+      setStatus("error");
+      setMessage("Add a title or brief for the card.");
+      return;
+    }
+    const title = manualCardTitle.trim() || "Untitled cartoon beat";
+    const brief = manualCardBrief.trim() || "Rough idea";
+    addBoardCard({
+      title,
+      brief,
+      prompt: `${title}. ${brief}. Cartoon key art with clear silhouettes, expressive acting, and production-ready composition.`,
+      modelHint: `${imageModelOption?.family ?? "Image"} / ${imageModelOption?.label ?? imageModel}`,
+    });
+    setManualCardTitle("");
+    setManualCardBrief("");
+  };
+
+  const sendCoachMessage = () => {
+    const text = coachInput.trim();
+    if (!text) return;
+    const userMessage: CoachMessage = { id: makeId(), role: "user", text, createdAt: Date.now() };
+    const assistantMessage = buildCoachReply(text, activeCharacter?.name);
+    setCoachMessages((current) => [...current, userMessage, assistantMessage]);
+    setCoachInput("");
   };
 
   const recoverKieTask = async () => {
@@ -737,6 +912,91 @@ export const AppShell = () => {
 
         <div className="flex-1 p-5 sm:p-8">
           {message ? <div className={`mb-5 rounded-xl border px-3 py-2 text-sm font-medium ${feedbackColor}`} role="status">{message}</div> : null}
+
+          {tab === "studio" ? (
+            <div className="grid gap-5 2xl:grid-cols-[minmax(0,1.5fr)_minmax(22rem,0.8fr)]">
+              <section className={`${panel} border-t-4 border-t-[#ffd23f] p-5`}>
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <h2 className="font-[family-name:var(--font-bricolage)] text-2xl font-black">Studio Board</h2>
+                    <p className="mt-1 text-xs text-[#6b6480]">Plan beats before spending credits. Move cards as they become prompts, renders, and finished shots.</p>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-[12rem_1fr_auto] lg:min-w-[36rem]">
+                    <input value={manualCardTitle} onChange={(e) => setManualCardTitle(e.target.value)} placeholder="Shot title" className={field} />
+                    <input value={manualCardBrief} onChange={(e) => setManualCardBrief(e.target.value)} placeholder="Brief idea" className={field} />
+                    <button type="button" onClick={createManualCard} className={`${btn} bg-[#ffd23f] text-[#05040a] hover:bg-[#ffdd66]`}>Add card</button>
+                  </div>
+                </div>
+                <div className="mt-5 grid gap-3 xl:grid-cols-4">
+                  {boardColumns.map((column) => {
+                    const columnCards = boardCards.filter((card) => card.status === column.id);
+                    return (
+                      <div key={column.id} className="min-h-72 rounded-xl border border-[#2e2640] bg-[#0c0a12]/85 p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="text-sm font-black uppercase tracking-[0.12em] text-[#fbf4e6]">{column.label}</h3>
+                          <span className="rounded-full px-2 py-0.5 text-[10px] font-black text-[#05040a]" style={{ backgroundColor: column.accent }}>{columnCards.length}</span>
+                        </div>
+                        <div className="mt-3 grid gap-3">
+                          {columnCards.length === 0 ? <p className="rounded-lg border border-dashed border-[#2e2640] p-3 text-xs text-[#6b6480]">No cards yet.</p> : null}
+                          {columnCards.map((card) => (
+                            <article key={card.id} className="rounded-xl border border-[#2e2640] bg-[#181320] p-3">
+                              <h4 className="text-sm font-black text-[#fbf4e6]">{card.title}</h4>
+                              <p className="mt-1 text-xs leading-4 text-[#b3a7c4]">{card.brief}</p>
+                              <p className="mt-2 line-clamp-3 text-[11px] leading-4 text-[#7c8499]">{card.prompt}</p>
+                              <p className="mt-2 rounded-lg bg-[#05040a] px-2 py-1 text-[10px] font-bold text-[#ffd23f]">{card.modelHint}</p>
+                              <div className="mt-3 flex flex-wrap gap-1.5">
+                                {boardColumns.map((target) => (
+                                  <button key={target.id} type="button" onClick={() => moveBoardCard(card.id, target.id)} disabled={card.status === target.id} className="rounded-lg border border-[#2e2640] px-2 py-1 text-[10px] font-bold text-[#b3a7c4] hover:text-[#fbf4e6] disabled:opacity-35">
+                                    {target.label}
+                                  </button>
+                                ))}
+                              </div>
+                              <div className="mt-2 flex items-center justify-between gap-2">
+                                <button type="button" onClick={() => loadCardIntoScenes(card)} className="text-[11px] font-black text-[#2ec4b6] hover:underline">Use in Scenes</button>
+                                <button type="button" onClick={() => deleteBoardCard(card.id)} className="text-[11px] font-bold text-[#6b6480] hover:text-[#ff5a3c]">delete</button>
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section className={`${panel} border-t-4 border-t-[#8a5cff] p-5`}>
+                <h2 className="font-[family-name:var(--font-bricolage)] text-2xl font-black">Art Coach</h2>
+                <p className="mt-1 text-xs text-[#6b6480]">A no-spend cartoon planning assistant. It knows the current model catalog and turns rough ideas into board cards.</p>
+                <div className="mt-4 grid max-h-[32rem] gap-3 overflow-y-auto pr-1">
+                  {coachMessages.map((chat) => (
+                    <div key={chat.id} className={`rounded-xl border p-3 ${chat.role === "user" ? "border-[#2e2640] bg-[#05040a]" : "border-[#8a5cff]/45 bg-[#8a5cff]/10"}`}>
+                      <p className="whitespace-pre-line text-sm leading-5 text-[#fbf4e6]">{chat.text}</p>
+                      {chat.card ? (
+                        <button type="button" onClick={() => addBoardCard(chat.card!, "ready")} className="mt-3 rounded-lg bg-[#8a5cff] px-3 py-1.5 text-[11px] font-black text-[#fbf4e6] hover:bg-[#9d75ff]">
+                          Add suggested card
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 grid gap-2">
+                  <textarea value={coachInput} onChange={(e) => setCoachInput(e.target.value)} placeholder="Ask for a scene idea, model recommendation, fight beat, style direction, or prompt polish." className={`${field} min-h-28 py-2`} />
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={sendCoachMessage} className={`${btn} bg-[#8a5cff] text-[#fbf4e6] hover:bg-[#9d75ff]`}>Send to coach</button>
+                    <button type="button" onClick={() => setCoachInput("A short cartoon scene where the hero makes a hard choice, with one memorable visual gag and a model recommendation.")} className={`${btn} border border-[#2e2640] text-[#fbf4e6] hover:bg-[#181320]`}>Seed idea</button>
+                  </div>
+                </div>
+                <div className="mt-5 rounded-xl border border-[#2e2640] bg-[#0c0a12] p-3">
+                  <h3 className="text-xs font-black uppercase tracking-[0.16em] text-[#ffd23f]">API direction</h3>
+                  <ul className="mt-2 grid gap-2 text-xs leading-4 text-[#b3a7c4]">
+                    <li>KIE remains the main BYOK generation rail: create a task, poll status, persist successful media.</li>
+                    <li>WaveSpeed stays useful as a secondary provider path, especially if you want fallback routing later.</li>
+                    <li>ElevenLabs direct import is right for personal voices; KIE TTS remains simpler for built-in voices.</li>
+                  </ul>
+                </div>
+              </section>
+            </div>
+          ) : null}
 
           {/* CAST */}
           {tab === "cast" ? (
