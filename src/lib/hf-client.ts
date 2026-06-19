@@ -5,6 +5,7 @@
 const KEY_STORAGE = "heroframe.kieKey";
 const ELEVENLABS_KEY_STORAGE = "heroframe.elevenLabsKey";
 const GLM_KEY_STORAGE = "heroframe.glmKey";
+const OPENROUTER_KEY_STORAGE = "heroframe.openRouterKey";
 const OWNER_STORAGE = "heroframe.owner";
 
 export const getKieKey = (): string => {
@@ -37,6 +38,16 @@ export const setGlmKey = (key: string): void => {
   window.localStorage.setItem(GLM_KEY_STORAGE, key.trim());
 };
 
+export const getOpenRouterKey = (): string => {
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem(OPENROUTER_KEY_STORAGE) ?? "";
+};
+
+export const setOpenRouterKey = (key: string): void => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(OPENROUTER_KEY_STORAGE, key.trim());
+};
+
 export const getOwnerId = (): string => {
   if (typeof window === "undefined") return "anon";
   let id = window.localStorage.getItem(OWNER_STORAGE);
@@ -53,9 +64,11 @@ export const hfFetch = (input: string, init: RequestInit = {}): Promise<Response
   const key = getKieKey();
   const elevenLabsKey = getElevenLabsKey();
   const glmKey = getGlmKey();
+  const openRouterKey = getOpenRouterKey();
   if (key) headers.set("x-kie-key", key);
   if (elevenLabsKey) headers.set("x-elevenlabs-key", elevenLabsKey);
   if (glmKey) headers.set("x-glm-key", glmKey);
+  if (openRouterKey) headers.set("x-openrouter-key", openRouterKey);
   headers.set("x-hf-owner", getOwnerId());
   return fetch(input, { ...init, headers });
 };

@@ -33,10 +33,43 @@ type GlmResponse = {
   error?: unknown;
 };
 
-const resolveGlmKey = (request: NextRequest): string => {
-  const key = request.headers.get("x-glm-key")?.trim();
-  if (!key) throw new Error("No GLM API key provided.");
-  return key;
+type CoachProvider = "openrouter" | "zai";
+
+type CoachProviderConfig = {
+  provider: CoachProvider;
+  apiKey: string;
+  endpoint: string;
+  model: string;
+  headers: Record<string, string>;
+};
+
+const resolveCoachProvider = (request: NextRequest): CoachProviderConfig => {
+  const openRouterKey = request.headers.get("x-openrouter-key")?.trim();
+  if (openRouterKey) {
+    return {
+      provider: "openrouter",
+      apiKey: openRouterKey,
+      endpoint: "https://openrouter.ai/api/v1/chat/completions",
+      model: "z-ai/glm-5.2",
+      headers: {
+        "HTTP-Referer": request.nextUrl.origin,
+        "X-Title": "HeroFrame Art Coach",
+      },
+    };
+  }
+
+  const glmKey = request.headers.get("x-glm-key")?.trim();
+  if (glmKey) {
+    return {
+      provider: "zai",
+      apiKey: glmKey,
+      endpoint: "https://api.z.ai/api/paas/v4/chat/completions",
+      model: "glm-5.2",
+      headers: {},
+    };
+  }
+
+  throw new Error("Add an OpenRouter or Z.AI GLM API key to use the Art Coach.");
 };
 
 const parseCoachPayload = (content: string): CoachPayload => {
@@ -65,11 +98,11 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
   const message = body.message?.trim();
   if (!message) return NextResponse.json({ ok: false, error: "message is required." }, { status: 400 });
 
-  let apiKey: string;
+  let provider: CoachProviderConfig;
   try {
-    apiKey = resolveGlmKey(request);
+    provider = resolveCoachProvider(request);
   } catch (error) {
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "No GLM API key." }, { status: 401 });
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "No Art Coach API key." }, { status: 401 });
   }
 
   const system = [
@@ -81,14 +114,15 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
   ].join(" ");
 
   try {
-    const response = await fetch("https://api.z.ai/api/paas/v4/chat/completions", {
+    const response = await fetch(provider.endpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${provider.apiKey}`,
         "Content-Type": "application/json",
+        ...provider.headers,
       },
       body: JSON.stringify({
-        model: "glm-5.2",
+        model: provider.model,
         messages: [
           { role: "system", content: system },
           {
@@ -111,17 +145,17 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
     const payload = (await response.json().catch(() => null)) as GlmResponse | null;
     if (!response.ok) {
-      return NextResponse.json({ ok: false, error: payload?.error ?? "GLM request failed." }, { status: response.status });
+      return NextResponse.json({ ok: false, error: payload?.error ?? `${provider.provider} request failed.` }, { status: response.status });
     }
 
     const choices = Array.isArray(payload?.choices) ? payload.choices : [];
     const first = choices[0] as GlmChoice | undefined;
     const content = typeof first?.message?.content === "string" ? first.message.content : "";
     if (!content) throw new Error("GLM returned no message content.");
-    return NextResponse.json({ ok: true, ...parseCoachPayload(content) });
+    return NextResponse.json({ ok: true, provider: provider.provider, ...parseCoachPayload(content) });
   } catch (error) {
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "GLM art coach failed." },
+      { ok: false, error: error instanceof Error ? error.message : "Art Coach request failed." },
       { status: 502 },
     );
   }

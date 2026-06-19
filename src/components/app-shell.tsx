@@ -7,7 +7,7 @@ import { useStylePresets } from "@/lib/use-style-presets";
 import { useFrames, type Frame } from "@/lib/use-frames";
 import { buildFightShots, expandShots } from "@/lib/shots";
 import { expandedTtsVoices, findModelOption, modelCatalog, defaultModel, pipelineModels, ttsVoices, type TtsVoiceOption } from "@/lib/kie/models";
-import { hfFetch, getElevenLabsKey, getGlmKey, getKieKey, setElevenLabsKey, setGlmKey, setKieKey } from "@/lib/hf-client";
+import { hfFetch, getElevenLabsKey, getGlmKey, getKieKey, getOpenRouterKey, setElevenLabsKey, setGlmKey, setKieKey, setOpenRouterKey } from "@/lib/hf-client";
 
 type Status = "idle" | "loading" | "success" | "error";
 type Speed = "fast" | "balanced" | "quality";
@@ -165,6 +165,8 @@ export const AppShell = () => {
   const [hasElevenLabsKey, setHasElevenLabsKey] = useState(false);
   const [glmKeyInput, setGlmKeyInput] = useState("");
   const [hasGlmKey, setHasGlmKey] = useState(false);
+  const [openRouterKeyInput, setOpenRouterKeyInput] = useState("");
+  const [hasOpenRouterKey, setHasOpenRouterKey] = useState(false);
   const [importedVoices, setImportedVoices] = useState<ImportedVoice[]>([]);
   const [importingVoices, setImportingVoices] = useState(false);
   const [useIdeoChar, setUseIdeoChar] = useState(false);
@@ -234,6 +236,8 @@ export const AppShell = () => {
     return acc;
   }, []);
   const selectedVoice = voiceOptions.find((voice) => voice.id === lipVoice);
+  const coachProviderLabel = hasOpenRouterKey ? "OpenRouter ready" : hasGlmKey ? "Z.AI ready" : "BYOK";
+  const coachSendLabel = hasOpenRouterKey ? "Send via OpenRouter" : hasGlmKey ? "Send to GLM 5.2" : "Use local coach";
 
   const refreshCredits = async () => {
     try {
@@ -249,6 +253,7 @@ export const AppShell = () => {
     const existing = getKieKey();
     const existingElevenLabs = getElevenLabsKey();
     const existingGlm = getGlmKey();
+    const existingOpenRouter = getOpenRouterKey();
     const storedBoard = parseBoardCards(window.localStorage.getItem(BOARD_STORAGE));
     const storedCoach = parseCoachMessages(window.localStorage.getItem(COACH_STORAGE));
     setHasKey(existing.length > 0);
@@ -257,6 +262,8 @@ export const AppShell = () => {
     setElevenLabsKeyInput(existingElevenLabs);
     setHasGlmKey(existingGlm.length > 0);
     setGlmKeyInput(existingGlm);
+    setHasOpenRouterKey(existingOpenRouter.length > 0);
+    setOpenRouterKeyInput(existingOpenRouter);
     setBoardCards(storedBoard);
     setCoachMessages(storedCoach.length ? storedCoach : [{
       id: makeId(),
@@ -304,6 +311,13 @@ export const AppShell = () => {
     setHasGlmKey(glmKeyInput.trim().length > 0);
     setStatus("success");
     setMessage(glmKeyInput.trim() ? "GLM key saved in your browser." : "GLM key cleared.");
+  };
+
+  const saveOpenRouterKey = () => {
+    setOpenRouterKey(openRouterKeyInput);
+    setHasOpenRouterKey(openRouterKeyInput.trim().length > 0);
+    setStatus("success");
+    setMessage(openRouterKeyInput.trim() ? "OpenRouter key saved in your browser." : "OpenRouter key cleared.");
   };
 
   const importElevenLabsVoices = async () => {
@@ -402,6 +416,10 @@ export const AppShell = () => {
     if (glmKeyInput.trim() && glmKeyInput.trim() !== getGlmKey()) {
       setGlmKey(glmKeyInput);
       setHasGlmKey(true);
+    }
+    if (openRouterKeyInput.trim() && openRouterKeyInput.trim() !== getOpenRouterKey()) {
+      setOpenRouterKey(openRouterKeyInput);
+      setHasOpenRouterKey(true);
     }
     try {
       const response = await hfFetch("/api/glm/art-coach", {
@@ -1047,22 +1065,36 @@ export const AppShell = () => {
                     <h2 className="font-[family-name:var(--font-bricolage)] text-2xl font-black">Art Coach</h2>
                     <p className="mt-1 text-xs text-[#6b6480]">GLM 5.2 art direction for cartoon prompts, model choice, and board cards.</p>
                   </div>
-                  <span className={`w-fit rounded-full px-2 py-1 text-[10px] font-black uppercase ${hasGlmKey ? "bg-[#4ade80] text-[#05040a]" : "bg-[#2e2640] text-[#b3a7c4]"}`}>
-                    {hasGlmKey ? "GLM ready" : "BYOK"}
+                  <span className={`w-fit rounded-full px-2 py-1 text-[10px] font-black uppercase ${hasOpenRouterKey || hasGlmKey ? "bg-[#4ade80] text-[#05040a]" : "bg-[#2e2640] text-[#b3a7c4]"}`}>
+                    {coachProviderLabel}
                   </span>
                 </div>
-                <div className="mt-4 grid gap-2 rounded-xl border border-[#2e2640] bg-[#0c0a12] p-3 sm:grid-cols-[1fr_auto]">
-                  <input
-                    type="password"
-                    value={glmKeyInput}
-                    onChange={(e) => setGlmKeyInput(e.target.value)}
-                    placeholder="Z.AI / GLM API key"
-                    className={field}
-                  />
-                  <button type="button" onClick={saveGlmKey} className={`${btn} border border-[#2e2640] text-[#fbf4e6] hover:bg-[#181320]`}>
-                    {hasGlmKey ? "Update GLM key" : "Save GLM key"}
-                  </button>
-                  <p className="text-[11px] leading-4 text-[#6b6480] sm:col-span-2">Stored only in your browser. The coach calls `glm-5.2`; if no key is saved, HeroFrame falls back to local guidance.</p>
+                <div className="mt-4 grid gap-3 rounded-xl border border-[#2e2640] bg-[#0c0a12] p-3">
+                  <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                    <input
+                      type="password"
+                      value={openRouterKeyInput}
+                      onChange={(e) => setOpenRouterKeyInput(e.target.value)}
+                      placeholder="OpenRouter API key"
+                      className={field}
+                    />
+                    <button type="button" onClick={saveOpenRouterKey} className={`${btn} border border-[#2e2640] text-[#fbf4e6] hover:bg-[#181320]`}>
+                      {hasOpenRouterKey ? "Update OpenRouter" : "Save OpenRouter"}
+                    </button>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                    <input
+                      type="password"
+                      value={glmKeyInput}
+                      onChange={(e) => setGlmKeyInput(e.target.value)}
+                      placeholder="Z.AI direct GLM API key"
+                      className={field}
+                    />
+                    <button type="button" onClick={saveGlmKey} className={`${btn} border border-[#2e2640] text-[#fbf4e6] hover:bg-[#181320]`}>
+                      {hasGlmKey ? "Update Z.AI" : "Save Z.AI"}
+                    </button>
+                  </div>
+                  <p className="text-[11px] leading-4 text-[#6b6480]">Stored only in your browser. OpenRouter uses `z-ai/glm-5.2` and is preferred when saved; Z.AI direct uses `glm-5.2`. Without a key, HeroFrame falls back to local guidance.</p>
                 </div>
                 <div className="mt-4 grid max-h-[32rem] gap-3 overflow-y-auto pr-1">
                   {coachMessages.map((chat) => (
@@ -1080,7 +1112,7 @@ export const AppShell = () => {
                   <textarea value={coachInput} onChange={(e) => setCoachInput(e.target.value)} placeholder="Ask for a scene idea, model recommendation, fight beat, style direction, or prompt polish." className={`${field} min-h-28 py-2`} />
                   <div className="flex flex-wrap gap-2">
                     <button type="button" onClick={() => void sendCoachMessage()} disabled={coachLoading} className={`${btn} bg-[#8a5cff] text-[#fbf4e6] hover:bg-[#9d75ff]`}>
-                      {coachLoading ? "Thinking..." : "Send to GLM 5.2"}
+                      {coachLoading ? "Thinking..." : coachSendLabel}
                     </button>
                     <button type="button" onClick={() => setCoachInput("A short cartoon scene where the hero makes a hard choice, with one memorable visual gag and a model recommendation.")} className={`${btn} border border-[#2e2640] text-[#fbf4e6] hover:bg-[#181320]`}>Seed idea</button>
                   </div>
