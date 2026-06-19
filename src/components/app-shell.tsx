@@ -7,7 +7,7 @@ import { useStylePresets } from "@/lib/use-style-presets";
 import { useFrames, type Frame } from "@/lib/use-frames";
 import { buildFightShots, expandShots } from "@/lib/shots";
 import { expandedTtsVoices, findModelOption, modelCatalog, defaultModel, pipelineModels, ttsVoices, type TtsVoiceOption } from "@/lib/kie/models";
-import { hfFetch, getElevenLabsKey, getKieKey, setElevenLabsKey, setKieKey } from "@/lib/hf-client";
+import { hfFetch, getElevenLabsKey, getGlmKey, getKieKey, setElevenLabsKey, setGlmKey, setKieKey } from "@/lib/hf-client";
 
 type Status = "idle" | "loading" | "success" | "error";
 type Speed = "fast" | "balanced" | "quality";
@@ -60,6 +60,12 @@ const tabs: { id: Tab; label: string; dot: string }[] = [
   { id: "lipsync", label: "Lipsync", dot: "#ff8cc8" },
   { id: "frames", label: "Frames", dot: "#ffd23f" },
   { id: "history", label: "History", dot: "#9aa6bd" },
+];
+
+const tabGroups: { label: string; tabs: Tab[] }[] = [
+  { label: "Plan", tabs: ["studio"] },
+  { label: "Create", tabs: ["cast", "scenes", "fight", "lipsync"] },
+  { label: "Review", tabs: ["frames", "history"] },
 ];
 
 const speeds: Speed[] = ["fast", "balanced", "quality"];
@@ -157,10 +163,14 @@ export const AppShell = () => {
   const [hasKey, setHasKey] = useState(false);
   const [elevenLabsKeyInput, setElevenLabsKeyInput] = useState("");
   const [hasElevenLabsKey, setHasElevenLabsKey] = useState(false);
+  const [glmKeyInput, setGlmKeyInput] = useState("");
+  const [hasGlmKey, setHasGlmKey] = useState(false);
   const [importedVoices, setImportedVoices] = useState<ImportedVoice[]>([]);
   const [importingVoices, setImportingVoices] = useState(false);
   const [useIdeoChar, setUseIdeoChar] = useState(false);
   const [previewCharacter, setPreviewCharacter] = useState<Character | null>(null);
+  const [showProductionSettings, setShowProductionSettings] = useState(false);
+  const [coachLoading, setCoachLoading] = useState(false);
 
   // Lipsync pipeline
   const [lipImageId, setLipImageId] = useState<string>("");
@@ -238,13 +248,15 @@ export const AppShell = () => {
   useEffect(() => {
     const existing = getKieKey();
     const existingElevenLabs = getElevenLabsKey();
+    const existingGlm = getGlmKey();
     const storedBoard = parseBoardCards(window.localStorage.getItem(BOARD_STORAGE));
     const storedCoach = parseCoachMessages(window.localStorage.getItem(COACH_STORAGE));
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasKey(existing.length > 0);
     setKieKeyInput(existing);
     setHasElevenLabsKey(existingElevenLabs.length > 0);
     setElevenLabsKeyInput(existingElevenLabs);
+    setHasGlmKey(existingGlm.length > 0);
+    setGlmKeyInput(existingGlm);
     setBoardCards(storedBoard);
     setCoachMessages(storedCoach.length ? storedCoach : [{
       id: makeId(),
@@ -285,6 +297,13 @@ export const AppShell = () => {
     setHasElevenLabsKey(elevenLabsKeyInput.trim().length > 0);
     setStatus("success");
     setMessage(elevenLabsKeyInput.trim() ? "ElevenLabs key saved in your browser." : "ElevenLabs key cleared.");
+  };
+
+  const saveGlmKey = () => {
+    setGlmKey(glmKeyInput);
+    setHasGlmKey(glmKeyInput.trim().length > 0);
+    setStatus("success");
+    setMessage(glmKeyInput.trim() ? "GLM key saved in your browser." : "GLM key cleared.");
   };
 
   const importElevenLabsVoices = async () => {
@@ -373,13 +392,50 @@ export const AppShell = () => {
     setManualCardBrief("");
   };
 
-  const sendCoachMessage = () => {
+  const sendCoachMessage = async () => {
     const text = coachInput.trim();
     if (!text) return;
     const userMessage: CoachMessage = { id: makeId(), role: "user", text, createdAt: Date.now() };
-    const assistantMessage = buildCoachReply(text, activeCharacter?.name);
-    setCoachMessages((current) => [...current, userMessage, assistantMessage]);
     setCoachInput("");
+    setCoachMessages((current) => [...current, userMessage]);
+    setCoachLoading(true);
+    if (glmKeyInput.trim() && glmKeyInput.trim() !== getGlmKey()) {
+      setGlmKey(glmKeyInput);
+      setHasGlmKey(true);
+    }
+    try {
+      const response = await hfFetch("/api/glm/art-coach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text,
+          activeHero: activeCharacter?.name,
+          imageModel: `${imageModelOption?.family ?? "Image"} / ${imageModelOption?.label ?? imageModel}`,
+          editModel: `${editModelOption?.family ?? "Reference"} / ${editModelOption?.label ?? editModel}`,
+          videoModel: `${videoModelOption?.family ?? "Video"} / ${videoModelOption?.label ?? videoModel}`,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as { ok?: boolean; reply?: string; card?: CoachMessage["card"]; error?: string } | null;
+      if (!response.ok || !payload?.ok || !payload.reply) throw new Error(payload?.error ?? "GLM art coach failed.");
+      const assistantMessage: CoachMessage = {
+        id: makeId(),
+        role: "assistant",
+        text: payload.reply,
+        card: payload.card,
+        createdAt: Date.now(),
+      };
+      setCoachMessages((current) => [...current, assistantMessage]);
+    } catch (error) {
+      const fallback = buildCoachReply(text, activeCharacter?.name);
+      setCoachMessages((current) => [...current, {
+        ...fallback,
+        text: `${fallback.text}\n\nGLM was unavailable: ${error instanceof Error ? error.message : "request failed"}`,
+      }]);
+      setStatus("error");
+      setMessage(error instanceof Error ? error.message : "GLM art coach failed.");
+    } finally {
+      setCoachLoading(false);
+    }
   };
 
   const recoverKieTask = async () => {
@@ -805,12 +861,22 @@ export const AppShell = () => {
             <p className="text-[10px] uppercase tracking-[0.18em] text-[#6b6480]">Cartoon maker</p>
           </div>
         </div>
-        <nav className="mt-8 flex flex-col gap-1">
-          {tabs.map((t) => (
-            <button key={t.id} type="button" onClick={() => setTab(t.id)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${tab === t.id ? "bg-[#181320] text-[#fbf4e6]" : "text-[#b3a7c4] hover:bg-[#181320] hover:text-[#fbf4e6]"}`}>
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: t.dot }} />
-              {t.label}
-            </button>
+        <nav className="mt-8 flex flex-col gap-4">
+          {tabGroups.map((group) => (
+            <div key={group.label}>
+              <p className="px-3 text-[10px] font-black uppercase tracking-[0.18em] text-[#6b6480]">{group.label}</p>
+              <div className="mt-1 grid gap-1">
+                {group.tabs.map((id) => {
+                  const t = tabs.find((item) => item.id === id)!;
+                  return (
+                    <button key={t.id} type="button" onClick={() => setTab(t.id)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${tab === t.id ? "bg-[#181320] text-[#fbf4e6]" : "text-[#b3a7c4] hover:bg-[#181320] hover:text-[#fbf4e6]"}`}>
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: t.dot }} />
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           ))}
         </nav>
         <div className="mt-auto rounded-xl border border-[#2e2640] bg-[#181320] p-3">
@@ -866,8 +932,19 @@ export const AppShell = () => {
           ))}
         </div>
 
-        <section className="border-b border-[#2e2640] bg-[#0c0a12]/55 px-5 py-4 sm:px-8">
-          <div className="grid gap-3 xl:grid-cols-3">
+        <section className="border-b border-[#2e2640] bg-[#0c0a12]/55 px-5 py-3 sm:px-8">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#6b6480]">Production settings</p>
+              <p className="truncate text-xs text-[#b3a7c4]">
+                Image: {imageModelOption?.label ?? imageModel} / Reference: {editModelOption?.label ?? editModel} / Video: {videoModelOption?.label ?? videoModel}
+              </p>
+            </div>
+            <button type="button" onClick={() => setShowProductionSettings((value) => !value)} className="w-fit rounded-lg border border-[#2e2640] px-3 py-1.5 text-xs font-black text-[#fbf4e6] hover:bg-[#181320]">
+              {showProductionSettings ? "Hide models" : "Choose models"}
+            </button>
+          </div>
+          {showProductionSettings ? <div className="mt-3 grid gap-3 xl:grid-cols-3">
             <div className="rounded-xl border border-[#2e2640] bg-[#181320]/70 p-3">
               <div className="flex items-center justify-between gap-2">
                 <label className={labelCls} htmlFor="image-model">New image</label>
@@ -907,7 +984,7 @@ export const AppShell = () => {
                 <code className="max-w-[45%] truncate rounded-md bg-[#05040a] px-1.5 py-1 text-[10px] text-[#7c8499]">{videoModel}</code>
               </div>
             </div>
-          </div>
+          </div> : null}
         </section>
 
         <div className="flex-1 p-5 sm:p-8">
@@ -965,8 +1042,28 @@ export const AppShell = () => {
               </section>
 
               <section className={`${panel} border-t-4 border-t-[#8a5cff] p-5`}>
-                <h2 className="font-[family-name:var(--font-bricolage)] text-2xl font-black">Art Coach</h2>
-                <p className="mt-1 text-xs text-[#6b6480]">A no-spend cartoon planning assistant. It knows the current model catalog and turns rough ideas into board cards.</p>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h2 className="font-[family-name:var(--font-bricolage)] text-2xl font-black">Art Coach</h2>
+                    <p className="mt-1 text-xs text-[#6b6480]">GLM 5.2 art direction for cartoon prompts, model choice, and board cards.</p>
+                  </div>
+                  <span className={`w-fit rounded-full px-2 py-1 text-[10px] font-black uppercase ${hasGlmKey ? "bg-[#4ade80] text-[#05040a]" : "bg-[#2e2640] text-[#b3a7c4]"}`}>
+                    {hasGlmKey ? "GLM ready" : "BYOK"}
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-2 rounded-xl border border-[#2e2640] bg-[#0c0a12] p-3 sm:grid-cols-[1fr_auto]">
+                  <input
+                    type="password"
+                    value={glmKeyInput}
+                    onChange={(e) => setGlmKeyInput(e.target.value)}
+                    placeholder="Z.AI / GLM API key"
+                    className={field}
+                  />
+                  <button type="button" onClick={saveGlmKey} className={`${btn} border border-[#2e2640] text-[#fbf4e6] hover:bg-[#181320]`}>
+                    {hasGlmKey ? "Update GLM key" : "Save GLM key"}
+                  </button>
+                  <p className="text-[11px] leading-4 text-[#6b6480] sm:col-span-2">Stored only in your browser. The coach calls `glm-5.2`; if no key is saved, HeroFrame falls back to local guidance.</p>
+                </div>
                 <div className="mt-4 grid max-h-[32rem] gap-3 overflow-y-auto pr-1">
                   {coachMessages.map((chat) => (
                     <div key={chat.id} className={`rounded-xl border p-3 ${chat.role === "user" ? "border-[#2e2640] bg-[#05040a]" : "border-[#8a5cff]/45 bg-[#8a5cff]/10"}`}>
@@ -982,7 +1079,9 @@ export const AppShell = () => {
                 <div className="mt-4 grid gap-2">
                   <textarea value={coachInput} onChange={(e) => setCoachInput(e.target.value)} placeholder="Ask for a scene idea, model recommendation, fight beat, style direction, or prompt polish." className={`${field} min-h-28 py-2`} />
                   <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={sendCoachMessage} className={`${btn} bg-[#8a5cff] text-[#fbf4e6] hover:bg-[#9d75ff]`}>Send to coach</button>
+                    <button type="button" onClick={() => void sendCoachMessage()} disabled={coachLoading} className={`${btn} bg-[#8a5cff] text-[#fbf4e6] hover:bg-[#9d75ff]`}>
+                      {coachLoading ? "Thinking..." : "Send to GLM 5.2"}
+                    </button>
                     <button type="button" onClick={() => setCoachInput("A short cartoon scene where the hero makes a hard choice, with one memorable visual gag and a model recommendation.")} className={`${btn} border border-[#2e2640] text-[#fbf4e6] hover:bg-[#181320]`}>Seed idea</button>
                   </div>
                 </div>
